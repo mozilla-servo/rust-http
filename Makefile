@@ -1,6 +1,6 @@
 RUST=rust
 RUSTC=rustc
-RUSTFLAGS=-O
+RUSTFLAGS=-O -Z debug-info
 VERSION=0.1-pre
 
 libhttp_so=build/libhttp-20af9b1d3441fe5a-$(VERSION).so
@@ -10,23 +10,12 @@ libhttp_files=\
 		      src/libhttp/common.rs \
 		      src/libhttp/generated/read_method.rs \
 		      src/libhttp/generated/status.rs \
-			  src/libhttp/headers/mod.rs \
-			  src/libhttp/headers/serialization_utils.rs \
-			  src/libhttp/headers/test_utils.rs \
-			  src/libhttp/headers/request.rs \
-			  src/libhttp/headers/response.rs \
-			  src/libhttp/headers/accept_ranges.rs \
-			  src/libhttp/headers/allow.rs \
-			  src/libhttp/headers/connection.rs \
-			  src/libhttp/headers/host.rs \
+		      $(wildcard src/libhttp/headers/*.rs) \
+		      $(wildcard src/libhttp/client/*.rs) \
+		      $(wildcard src/libhttp/server/*.rs) \
+		      src/libhttp/memstream.rs \
 		      src/libhttp/method.rs \
-		      src/libhttp/rfc2616.rs \
-		      src/libhttp/client/mod.rs \
-		      src/libhttp/client/request.rs \
-		      src/libhttp/client/response.rs \
-		      src/libhttp/server/mod.rs \
-		      src/libhttp/server/request.rs \
-		      src/libhttp/server/response.rs
+		      src/libhttp/rfc2616.rs
 
 all: $(libhttp_so) examples
 
@@ -34,7 +23,7 @@ src/libhttp/codegen/codegen: $(wildcard src/libhttp/codegen/*.rs)
 	$(RUSTC) $(RUSTFLAGS) $@.rs
 
 src/libhttp/generated/%.rs: src/libhttp/codegen/codegen
-	src/libhttp/codegen/codegen $(patsubst src/libhttp/generated/%,%,$@)
+	src/libhttp/codegen/codegen $(patsubst src/libhttp/generated/%,%,$@) src/libhttp/generated/
 
 $(libhttp_so): $(libhttp_files)
 	mkdir -p build/
@@ -46,15 +35,14 @@ build/%:: src/%.rs $(libhttp_so)
 
 examples: build/examples/apache_fake build/examples/hello_world build/examples/info build/examples/client/client
 
-tests: $(libhttp_files)
+build/tests: $(libhttp_files)
 	$(RUSTC) $(RUSTFLAGS) --test -o build/tests src/libhttp/lib.rs
+
+check: build/tests
 	build/tests --test
 
-clean-tests:
-	rm -f build/tests
-
-clean: clean-tests
+clean:
 	rm -rf src/libhttp/generated/ src/libhttp/codegen/codegen
 	rm -rf build/
 
-.PHONY: all examples clean tests clean-tests
+.PHONY: all examples clean check

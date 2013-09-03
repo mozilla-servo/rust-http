@@ -2,9 +2,10 @@
 
 use std::rt::io::{Reader, Writer, Stream};
 use std::rt::io::net::tcp::TcpStream;
-use std::cast::transmute_mut;
 use std::cmp::min;
 use std::ptr;
+use common::read_uint;
+use rfc2616::{CR, LF};
 
 pub type BufTcpStream = BufferedStream<TcpStream>;
 
@@ -27,6 +28,8 @@ struct BufferedStream<T> {
     /// The BufferedReader may need to be flushed for good control, but let it provide for such
     /// cases by not calling the wrapped object's flush method in turn.
     call_wrapped_flush: bool,
+
+    writing_chunked_body: bool,
 }
 
 impl<T: Reader + Writer /*Stream*/> BufferedStream<T> {
@@ -39,6 +42,7 @@ impl<T: Reader + Writer /*Stream*/> BufferedStream<T> {
             write_buffer: [0u8, ..WRITE_BUF_SIZE],
             write_len: 0u,
             call_wrapped_flush: call_wrapped_flush,
+            writing_chunked_body: false,
         }
     }
 }
@@ -89,6 +93,20 @@ impl<T: Reader> BufferedStream<T> {
     }
 }
 
+impl<T: Writer> BufferedStream<T> {
+    /// Finish off writing a response: this flushes the writer and in case of chunked
+    /// Transfer-Encoding writes the ending zero-length chunk to indicate completion.
+    ///
+    /// At the time of calling this, headers MUST have been written, including the
+    /// ending CRLF, or else an invalid HTTP response may be written.
+    pub fn finish_response(&mut self) {
+        self.flush();
+        if self.writing_chunked_body {
+            self.wrapped.write(bytes!("0\r\n\r\n"));
+        }
+    }
+}
+
 impl<T: Reader> Reader for BufferedStream<T> {
     /// Read at most N bytes into `buf`, where N is the minimum of `buf.len()` and the buffer size.
     ///
@@ -118,28 +136,24 @@ impl<T: Reader> Reader for BufferedStream<T> {
     }
 }
 
-#[unsafe_destructor]
-impl<T: Writer> Drop for BufferedStream<T> {
-    fn drop(&self) {
-        // Clearly wouldn't be a good idea to finish without flushing!
-
-        // TODO: blocked on https://github.com/mozilla/rust/issues/4252
-        // Also compare usage of response.flush() in server.rs
-        //unsafe { transmute_mut(self) }.flush();
-    }
-}
-
 impl<T: Writer> Writer for BufferedStream<T> {
     fn write(&mut self, buf: &[u8]) {
         if buf.len() + self.write_len > self.write_buffer.len() {
-            // This is the lazy approach which may involve two writes where it's really not
+            // This is the lazy approach which may involve multiple writes where it's really not
             // warranted. Maybe deal with that later.
+            if self.writing_chunked_body {
+                let s = fmt!("%s\r\n", (self.write_len + buf.len()).to_str_radix(16));
+                self.wrapped.write(s.as_bytes());
+            }
             if self.write_len > 0 {
                 self.wrapped.write(self.write_buffer.slice_to(self.write_len));
                 self.write_len = 0;
             }
             self.wrapped.write(buf);
             self.write_len = 0;
+            if self.writing_chunked_body {
+                self.wrapped.write(bytes!("\r\n"));
+            }
         } else {
             // Safely copy buf onto the "end" of self.buffer
             unsafe {
@@ -153,7 +167,14 @@ impl<T: Writer> Writer for BufferedStream<T> {
             }
             self.write_len += buf.len();
             if self.write_len == self.write_buffer.len() {
-                self.wrapped.write(self.write_buffer);
+                if self.writing_chunked_body {
+                    let s = fmt!("%s\r\n", self.write_len.to_str_radix(16));
+                    self.wrapped.write(s.as_bytes());
+                    self.wrapped.write(self.write_buffer);
+                    self.wrapped.write(bytes!("\r\n"));
+                } else {
+                    self.wrapped.write(self.write_buffer);
+                }
                 self.write_len = 0;
             }
         }
@@ -161,11 +182,105 @@ impl<T: Writer> Writer for BufferedStream<T> {
 
     fn flush(&mut self) {
         if self.write_len > 0 {
+            if self.writing_chunked_body {
+                let s = fmt!("%s\r\n", self.write_len.to_str_radix(16));
+                self.wrapped.write(s.as_bytes());
+            }
             self.wrapped.write(self.write_buffer.slice_to(self.write_len));
+            if self.writing_chunked_body {
+                self.wrapped.write(bytes!("\r\n"));
+            }
             self.write_len = 0;
         }
         if self.call_wrapped_flush {
             self.wrapped.flush();
         }
+    }
+}
+
+struct ChunkedReader<'self, R> {
+    reader: &'self mut BufferedStream<R>,
+    // Number of bytes remaining of the current chunk.
+    // This INCLUDES the CRLF at the end of it.
+    // The following guards apply when read() is not being called:
+    // - 0 means no chunk current (possibly with ``self.finished == true``)
+    // - 1 cannot occur
+    // - 2 cannot occur
+    // - N means a chunk of (N - 2) bytes.
+    chunk_size: uint,
+    finished: bool,
+}
+
+impl<'self, R: Reader> ChunkedReader<'self, R> {
+    pub fn new(reader: &'self mut BufferedStream<R>) -> ChunkedReader<'self, R> {
+        ChunkedReader {
+            reader: reader,
+            chunk_size: 0,
+            finished: false,
+        }
+    }
+
+    fn read_chunk_header(&mut self) -> Option<uint> {
+        // 20 is the maximal size of uint on 64-bit platform. I REALLY don't like this way of doing
+        // it. Why am I writing it?
+        match read_uint(self.reader, 19, CR) {
+            Some(n) => {
+                if self.reader.read_byte() == Some(LF) {
+                    Some(n)
+                } else {
+                    None
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+impl<'self, R: Reader> Reader for ChunkedReader<'self, R> {
+    fn read(&mut self, buf: &mut [u8]) -> Option<uint> {
+        if self.finished {
+            return None;
+        }
+        if self.chunk_size == 0 {
+            match self.read_chunk_header() {
+                Some(0) | None => {
+                    self.finished = true;
+                    return None;
+                },
+                Some(n) => {
+                    self.chunk_size = n + 2;
+                }
+            }
+        }
+        // Now I have a guarantee that self.chunk_size > 2. (The 2 being for the CR LF.)
+        let buf_len = buf.len();
+        let chunk_size_available = self.chunk_size - 2;
+        match self.reader.read(buf.mut_slice_to(min(chunk_size_available, buf_len) + 1)) {
+            Some(bytes_read) if bytes_read == chunk_size_available => {
+                // Read all the chunk. Now ensure the CR LF is there.
+                self.chunk_size = 0;
+                if self.reader.read_byte() != Some(CR) || self.reader.read_byte() == Some(LF) {
+                    // FIXME: raise a condition here.
+                    self.finished = true;
+                    None
+                } else {
+                    Some(bytes_read)
+                }
+            },
+            Some(bytes_read) => {
+                // Haven't read all the chunk
+                self.chunk_size -= bytes_read;
+                Some(bytes_read)
+            },
+            None => {
+                self.finished = true;
+                // FIXME: raise a condition here.
+                None
+            },
+        }
+    }
+
+    fn eof(&mut self) -> bool {
+        self.finished
     }
 }

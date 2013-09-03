@@ -10,6 +10,7 @@ use extra::time;
 
 use http::server::{Config, Server, ServerUtil, Request, ResponseWriter};
 use http::headers::HeaderEnum;
+use http::headers::content_type::MediaType;
 
 #[deriving(Clone)]
 struct InfoServer;
@@ -21,7 +22,11 @@ impl Server for InfoServer {
 
     fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
         w.headers.date = Some(time::now_utc());
-        w.headers.content_type = Some(~"text/html; charset=UTF-8");
+        w.headers.content_type = Some(MediaType {
+            type_: ~"text",
+            subtype: ~"html",
+            parameters: ~[(~"charset", ~"UTF-8")]
+        });
         w.headers.server = Some(~"Rust Thingummy/0.0-pre");
         w.write(bytes!("<!DOCTYPE html><title>Rust HTTP server</title>"));
 
@@ -66,10 +71,6 @@ impl Server for InfoServer {
             }
         }
         w.write(bytes!("</tbody></table>"));
-        // Server doesn't yet support the chunked transfer coding, nor was Content-Length specified,
-        // so we'd better close the connection to ensure the page finishes loading.
-        // DON'T COPY THIS WAY OF DOING THINGS. EVER. OR ELSE.
-        unsafe { ::std::cast::transmute::<&Request, &mut Request>(r).close_connection = true; }
     }
 }
 
