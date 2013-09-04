@@ -1,22 +1,21 @@
-use std::rt::io::Reader;
+use std::rt::io::{Reader, Writer};
 use std::rt::io::extensions::ReaderUtil;
 use std::rt::io::{io_error, OtherIoError, IoError};
-use std::rt;
 use client::request::RequestWriter;
 use rfc2616::{CR, LF, SP};
 use common::read_http_version;
 use headers;
 use status::Status;
 
-use buffer::BufTcpStream;
+use buffer::BufferedStream;
 use server::request::{RequestBuffer};
 use headers::{EndOfFile, EndOfHeaders, MalformedHeaderSyntax, MalformedHeaderValue};
 
-struct ResponseReader {
-    priv stream: BufTcpStream,
+struct ResponseReader<S> {
+    priv stream: BufferedStream<S>,
 
     /// The request which this is a response to
-    request: ~RequestWriter,
+    request: ~RequestWriter<S>,
 
     /// The HTTP version number; typically `(1, 1)` or, less commonly, `(1, 0)`.
     version: (uint, uint),
@@ -37,9 +36,9 @@ fn bad_response_err() -> IoError {
     }
 }
 
-impl ResponseReader {
-    pub fn construct(mut stream: BufTcpStream, request: ~RequestWriter)
-            -> Result<ResponseReader, ~RequestWriter> {
+impl<S: Reader + Writer> ResponseReader<S> {
+    pub fn construct(mut stream: BufferedStream<S>, request: ~RequestWriter<S>)
+            -> Result<ResponseReader<S>, ~RequestWriter<S>> {
         // TODO: raise condition at the points where Err is returned
         //let mut b = [0u8, ..4096];
         //let len = stream.read(b);
@@ -108,7 +107,10 @@ impl ResponseReader {
             let mut buffer = RequestBuffer::new(&mut stream);
             let mut headers = ~headers::response::HeaderCollection::new();
             loop {
-                match buffer.read_header::<headers::response::Header>() {
+                let xxx = buffer.read_header::<headers::response::Header>();
+                info!("header = %?", xxx);
+                match xxx {
+                //match buffer.read_header::<headers::response::Header>() {
                     Err(EndOfFile) => {
                         io_error::cond.raise(bad_response_err());
                         //fail!("server disconnected, no more response to receive :-(");
@@ -141,7 +143,7 @@ impl ResponseReader {
     }
 }
 
-impl rt::io::Reader for ResponseReader {
+impl<S: Reader + Writer> Reader for ResponseReader<S> {
     fn read(&mut self, buf: &mut [u8]) -> Option<uint> {
         self.stream.read(buf)
     }

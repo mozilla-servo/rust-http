@@ -5,6 +5,8 @@ use buffer::BufTcpStream;
 use server::Request;
 use status;
 use headers::response::HeaderCollection;
+use headers::content_type::MediaType;
+use headers::transfer_encoding::Chunked;
 
 /**
  * The HTTP version tag which will be used for the response.
@@ -39,7 +41,7 @@ impl<'self> ResponseWriter<'self> {
 
     /// Write a response with the specified Content-Type and content; the Content-Length header is
     /// set based upon the contents
-    pub fn write_content_auto(&mut self, content_type: ~str, content: ~str) {
+    pub fn write_content_auto(&mut self, content_type: MediaType, content: ~str) {
         self.headers.content_type = Some(content_type);
         let cbytes = content.as_bytes();
         self.headers.content_length = Some(cbytes.len());
@@ -56,6 +58,10 @@ impl<'self> ResponseWriter<'self> {
 
     /// Write the Status-Line and headers of the response, in preparation for writing the body.
     ///
+    /// This also overrides the value of the Transfer-Encoding header
+    /// (``self.headers.transfer_encoding``), ensuring it is ``None`` if the Content-Length header
+    /// has been specified, or to ``chunked`` if it has not, thus switching to the chunked coding.
+    ///
     /// If the headers have already been written, this will fail. See also `try_write_headers`.
     pub fn write_headers(&mut self) {
         // This marks the beginning of the response (RFC2616 §6)
@@ -70,8 +76,31 @@ impl<'self> ResponseWriter<'self> {
         let s = fmt!("HTTP/1.1 %s\r\n", self.status.to_str());
         self.writer.write(s.as_bytes());
 
+        // FIXME: this is not an impressive way of handling it, but so long as chunked is the only
+        // transfer-coding we want to deal with it's tolerable. However, it is *meant* to be an
+        // extensible thing, whereby client and server could agree upon extra transformations to
+        // apply. In such a case, chunked MUST come last. This way prevents it from being extensible
+        // thus, which is suboptimal.
+        if self.headers.content_length == None {
+            self.headers.transfer_encoding = Some(~[Chunked]);
+        } else {
+            self.headers.transfer_encoding = None;
+        }
         self.headers.write_all(self.writer);
         self.headers_written = true;
+        if self.headers.content_length == None {
+            // Flush so that the chunked body stuff can start working correctly. TODO: don't
+            // actually flush it entirely, or else it'll send the headers in a separate TCP packet,
+            // which is bad for performance.
+            self.writer.flush();
+            self.writer.writing_chunked_body = true;
+        }
+    }
+
+    pub fn finish_response(&mut self) {
+        self.writer.finish_response();
+        // Ensure that we switch away from chunked in case another request comes on the same socket
+        self.writer.writing_chunked_body = false;
     }
 }
 

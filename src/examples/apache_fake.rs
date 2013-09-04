@@ -38,18 +38,25 @@ impl Server for ApacheFakeServer {
             tm_zone: ~"GMT", // timezone abbreviation
             tm_nsec: 0, // nanoseconds
         });
-        w.headers.etag = Some(~"501b29-b1-4a285ed47404a");
-        w.headers.accept_ranges = Some(headers::accept_ranges::RangeUnit(
-                                            headers::accept_ranges::Bytes));
+        w.headers.etag = Some(headers::etag::EntityTag {
+                                weak: false,
+                                opaque_tag: ~"501b29-b1-4a285ed47404a" });
+        w.headers.accept_ranges = Some(headers::accept_ranges::RangeUnits(
+                                            ~[headers::accept_ranges::Bytes]));
         w.headers.content_length = Some(177);
         w.headers.vary = Some(~"Accept-Encoding");
-        w.headers.content_type = Some(~"text/html");
+        w.headers.content_type = Some(headers::content_type::MediaType {
+            type_: ~"text",
+            subtype: ~"html",
+            parameters: ~[]
+        });
         w.headers.extensions.insert(~"X-Pad", ~"avoid browser bug");
 
-        w.write(bytes!("<html><body><h1>It works!</h1>
-<p>This is the default web page for this server.</p>
-<p>The web server software is running but no content has been added, yet.</p>
-</body></html>\n"));
+        w.write(bytes!("\
+            <html><body><h1>It works!</h1>\n\
+            <p>This is the default web page for this server.</p>\n\
+            <p>The web server software is running but no content has been added, yet.</p>\n\
+            </body></html>\n"));
     }
 }
 

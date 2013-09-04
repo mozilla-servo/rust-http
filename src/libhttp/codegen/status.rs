@@ -68,8 +68,8 @@ fn camel_case(msg: &str) -> ~str {
 static mut longest_ident: uint = 0;
 static mut longest_reason: uint = 0;
 
-pub fn generate() {
-    let out = get_writer("status.rs");
+pub fn generate(output_dir: &Path) {
+    let out = get_writer(output_dir, "status.rs");
     let entries = [
         Left("1xx Informational"),
         StatusN(100, "Continue"),
@@ -219,7 +219,7 @@ impl Status {
     for &entry in entries.iter() {
         match entry {
             Left(heading) => out.write_str(fmt!("\n            // %s\n", heading)),
-            Right(status) => out.write_str(fmt!("            (%?, \"%s\")%s => %s,\n",
+            Right(status) => out.write_str(fmt!("            (%u, \"%s\")%s => %s,\n",
                                                 status.code,
                                                 status.reason.to_ascii_lower(),
                                                 status.reason_padding_spaces(),
@@ -236,7 +236,7 @@ impl ToStr for Status {
     /// Produce the HTTP status message incorporating both code and message,
     /// e.g. `ImATeapot.to_str() == \"418 I'm a teapot\"`
 	fn to_str(&self) -> ~str {
-		fmt!(\"%? %s\", self.code(), self.reason())
+		fmt!(\"%s %s\", self.code().to_str(), self.reason())
 	}
 }
 
@@ -255,7 +255,7 @@ impl IntConvertible for Status {
     fn from_int(n: int) -> Status {
         match n {
 ");
-    let mut matched_numbers = HashSet::new::<uint>();
+    let mut matched_numbers = HashSet::new();
     for &entry in entries.iter() {
         match entry {
             Left(heading) => out.write_str(fmt!("\n            // %s\n", heading)),

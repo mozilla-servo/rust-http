@@ -10,7 +10,11 @@
 #[deny(non_camel_case_types)];
 //#[deny(missing_doc)];
 
+#[macro_escape];
+
 extern mod extra;
+
+macro_rules! unreachable(() => (fail!("internal error: entered unreachable code")))
 
 pub mod buffer;
 pub mod client;
@@ -21,3 +25,6 @@ pub mod headers;
 pub mod rfc2616;
 #[path = "generated/status.rs"]
 pub mod status;  // Getting an error? It's generated; use ``make`` or see the ``Makefile``
+
+/// TODO: submit upstream
+pub mod memstream;

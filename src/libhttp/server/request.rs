@@ -1,11 +1,11 @@
 use extra::url::Url;
 use method::{Method, Options};
 use status;
+use std::rt::io::{Reader, Writer};
 use std::rt::io::net::ip::SocketAddr;
-use std::util::unreachable;
 use rfc2616::{CR, LF, SP};
 use headers;
-use buffer::BufTcpStream;
+use buffer::{BufferedStream, BufTcpStream};
 use common::read_http_version;
 
 use headers::{HeaderLineErr, EndOfFile, EndOfHeaders, MalformedHeaderSyntax, MalformedHeaderValue};
@@ -21,16 +21,16 @@ static MAX_HTTP_VERSION_LEN: uint = 1024;
 /// Moderately arbitrary figure: read in 64KB chunks. GET requests should never be this large.
 static BUF_SIZE: uint = 0x10000;  // Let's try 64KB chunks
 
-pub struct RequestBuffer<'self> {
+pub struct RequestBuffer<'self, S> {
     /// The socket connection to read from
-    stream: &'self mut BufTcpStream,
+    stream: &'self mut BufferedStream<S>,
 
     /// A working space for 
     line_bytes: ~[u8],
 }
 
-impl<'self> RequestBuffer<'self> {
-    pub fn new<'a>(stream: &'a mut BufTcpStream) -> RequestBuffer<'a> {
+impl<'self, S: Reader + Writer> RequestBuffer<'self, S> {
+    pub fn new<'a>(stream: &'a mut BufferedStream<S>) -> RequestBuffer<'a, S> {
         RequestBuffer {
             stream: stream,
             line_bytes: ~[0u8, ..MAX_LINE_LEN],
@@ -79,7 +79,7 @@ impl<'self> RequestBuffer<'self> {
                 }
             }
         }
-        match FromStr::from_str::<RequestUri>(request_uri) {
+        match FromStr::from_str(request_uri) {
             Some(r) => Ok(r),
             None => Err(status::BadRequest),
         }
@@ -109,7 +109,7 @@ impl<'self> RequestBuffer<'self> {
                 self.stream.poke_byte(b);
                 Ok(header)
             }
-            (Ok(_header), None) => unreachable()
+            (Ok(_header), None) => unreachable!()
         }
     }
 }
@@ -186,7 +186,7 @@ impl FromStr for RequestUri {
             Some(AbsolutePath(request_uri.to_owned()))
         } else if request_uri.contains("/") {
             // An authority can't have a slash in it
-            match FromStr::from_str::<Url>(request_uri) {
+            match FromStr::from_str(request_uri) {
                 Some(url) => Some(AbsoluteUri(url)),
                 None => None,
             }
@@ -254,14 +254,23 @@ impl Request {
             return (request, Err(status::BadRequest));
         }
 
-        request.close_connection = match request.headers.connection {
-            Some(headers::connection::Close) => true,
-            Some(headers::connection::Token(ref s)) => match s.as_slice() {
-                "keep-alive" => false,
-                _ => close_connection,
+        request.close_connection = close_connection;
+        match request.headers.connection {
+            Some(ref h) => for v in h.iter() {
+                match *v {
+                    headers::connection::Close => {
+                        request.close_connection = true;
+                        break;
+                    },
+                    headers::connection::Token(ref s) if s.as_slice() == "keep-alive" => {
+                        request.close_connection = false;
+                        // No break; let it be overridden by close should some weird person do that
+                    },
+                    headers::connection::Token(_) => (),
+                }
             },
-            None => close_connection,
-        };
+            None => (),
+        }
 
         (request, Ok(()))
     }
