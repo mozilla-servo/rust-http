@@ -32,7 +32,7 @@ struct BufferedStream<T> {
     writing_chunked_body: bool,
 }
 
-impl<T: Reader + Writer /*Stream*/> BufferedStream<T> {
+impl<T: Stream> BufferedStream<T> {
     pub fn new(stream: T, call_wrapped_flush: bool) -> BufferedStream<T> {
         BufferedStream {
             wrapped: stream,
