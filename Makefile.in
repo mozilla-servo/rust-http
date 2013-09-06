@@ -40,5 +40,6 @@ clean-tests:
 clean: clean-tests
 	rm -rf $(VPATH)src/libhttp/generated/ codegen
 	rm -rf libhttp.dummy
+	rm -f *.so *.dylib *.dll
 
 .PHONY: all examples clean tests clean-tests
