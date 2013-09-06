@@ -269,17 +269,21 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
         if !already_read_semicolon && self.next() != Some(';' as u8) {
             return None;
         }
+        self.consume_optional_lws();
         let key = match self.read_token() {
             Some(t) => t,
             None => return None,
         };
+        self.consume_optional_lws();
         if self.next() != Some('=' as u8) {
             return None;
         }
+        self.consume_optional_lws();
         let value = match self.read_token_or_quoted_string() {
             Some(t) => t,
             None => return None,
         };
+        self.consume_optional_lws();
         Some((key, value))
     }
 
@@ -849,7 +853,6 @@ macro_rules! headers_mod {
             use extra::treemap::{TreeMap, TreeMapIterator};
             use headers;
             use headers::{HeaderEnum, HeaderConvertible, HeaderValueByteIterator};
-            use headers::serialization_utils::push_maybe_quoted_string;
 
             pub enum Header {
                 $($caps_ident($htype),)*
@@ -961,7 +964,7 @@ macro_rules! headers_mod {
                             s.reserve(name.len() + 4 + value.len());
                             s.push_str(*name);
                             s.push_str(": ");
-                            let s = push_maybe_quoted_string(s, *value);
+                            s.push_str(*value);
                             writer.write(s.as_bytes());
                             writer.write(bytes!("\r\n"));
                             return
