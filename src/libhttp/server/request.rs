@@ -1,7 +1,7 @@
 use extra::url::Url;
 use method::{Method, Options};
 use status;
-use std::rt::io::{Reader, Writer};
+use std::rt::io::Stream;
 use std::rt::io::net::ip::SocketAddr;
 use rfc2616::{CR, LF, SP};
 use headers;
@@ -29,7 +29,7 @@ pub struct RequestBuffer<'self, S> {
     line_bytes: ~[u8],
 }
 
-impl<'self, S: Reader + Writer> RequestBuffer<'self, S> {
+impl<'self, S: Stream> RequestBuffer<'self, S> {
     pub fn new<'a>(stream: &'a mut BufferedStream<S>) -> RequestBuffer<'a, S> {
         RequestBuffer {
             stream: stream,
@@ -109,7 +109,11 @@ impl<'self, S: Reader + Writer> RequestBuffer<'self, S> {
                 self.stream.poke_byte(b);
                 Ok(header)
             }
-            (Ok(_header), None) => unreachable!()
+            (Ok(header), None) => {
+                // This should have read an extra byte, on account of the CR LF SP possibility
+                error!("header with no next byte, did reading go wrong?");
+                Ok(header)
+            }
         }
     }
 }
