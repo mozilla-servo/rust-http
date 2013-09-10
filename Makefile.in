@@ -3,6 +3,7 @@ VPATH=%VPATH%
 RUST ?= rust
 RUSTC ?= rustc
 RUSTFLAGS ?= -O
+HOST_RUSTFLAGS ?= -O
 VERSION=0.1-pre
 
 libhttp_files=$(shell find $(VPATH)/src/libhttp/ -type f -name '*.rs') \
@@ -12,7 +13,7 @@ libhttp_files=$(shell find $(VPATH)/src/libhttp/ -type f -name '*.rs') \
 all: libhttp.dummy
 
 codegen: $(wildcard $(VPATH)/src/libhttp/codegen/*.rs)
-	$(RUSTC) $(RUSTFLAGS) $(VPATH)/src/libhttp/codegen/codegen.rs -o codegen
+	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/libhttp/codegen/codegen.rs -o codegen
 
 $(VPATH)/src/libhttp/generated/%.rs: codegen
 	./codegen $(patsubst $(VPATH)/src/libhttp/generated/%,%,$@) $(VPATH)/src/libhttp/generated/
