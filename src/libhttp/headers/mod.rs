@@ -161,7 +161,7 @@ pub struct HeaderValueByteIterator<'self, R> {
 
 impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
 
-    fn new(reader: &'self mut R) -> HeaderValueByteIterator<'self, R> {
+    pub fn new(reader: &'self mut R) -> HeaderValueByteIterator<'self, R> {
         HeaderValueByteIterator {
             reader: reader,
             next_byte: None,
@@ -171,6 +171,8 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
     }
 
     /// Check that the entire header value has been consumed.
+    ///
+    /// Should there be any trailing linear white space, it is dropped.
     ///
     /// Be cautious using this function as it is destructive, losing a character in the case where
     /// the value has not been entirely consumed.
@@ -185,9 +187,25 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
     ///     } else {
     ///         None
     ///     }
+    ///
+    /// ... however, this common case is handled with the ``some_if_consumed`` method, so you may
+    /// very well not need to call this function directly.
     #[inline]
-    fn verify_consumed(&mut self) -> bool {
+    pub fn verify_consumed(&mut self) -> bool {
+        self.consume_optional_lws();
         self.next() == None
+    }
+
+    /// Turn a constructed header value into an Option: Some(value) if the header value is consumed
+    /// or None if it is not, thus indicating: "I'm finished and expect nothing more. Anything more
+    /// is an error."
+    #[inline]
+    pub fn some_if_consumed<T>(&mut self, t: T) -> Option<T> {
+        if self.verify_consumed() {
+            Some(t)
+        } else {
+            None
+        }
     }
 
     // TODO: can we have collect() implemented for ~str? That would negate the need for this.
@@ -208,7 +226,7 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
         out
     }
 
-    fn consume_optional_lws(&mut self) {
+    pub fn consume_optional_lws(&mut self) {
         match self.next() {
             Some(b) if b != ' ' as u8 => {
                 // TODO: manually verify this holds
@@ -223,7 +241,7 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
     /// - CommaConsumed if there was a comma and it was consumed;
     /// - EndOfValue if the header value has been completely consumed;
     /// - ErrCommaNotFound if the next thing wasn't a comma (this is an error state)
-    fn consume_comma_lws(&mut self) -> ConsumeCommaLWSResult {
+    pub fn consume_comma_lws(&mut self) -> ConsumeCommaLWSResult {
         self.consume_optional_lws();
         match self.next() {
             Some(b) if b == ',' as u8 => {
@@ -350,8 +368,8 @@ impl<'self, R: Reader> HeaderValueByteIterator<'self, R> {
                     output.push_char(b as char);
                 },
                 Some(b) => {
-                    printfln!("TODO: what should be done with a token ended with a non-separator? \
-(With token %?, %? was read.)", output, b as char);
+                    println!("TODO: what should be done with a token ended with a non-separator? \
+(With token {}, {} was read.)", output, b as char);
                 }
             }
         }
@@ -612,7 +630,7 @@ impl HeaderConvertible for Url {
     }
 }
 
-impl CommaListHeaderConvertible for Method;
+impl CommaListHeaderConvertible for Method {}
 
 impl HeaderConvertible for Method {
     fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<Method> {

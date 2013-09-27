@@ -3,7 +3,7 @@
 use std::rt::io::{Reader, Writer, Stream};
 use std::rt::io::net::tcp::TcpStream;
 use std::cmp::min;
-use std::ptr;
+use std::vec;
 use common::read_uint;
 use rfc2616::{CR, LF};
 
@@ -116,14 +116,7 @@ impl<T: Reader> Reader for BufferedStream<T> {
             return None;
         }
         let size = min(self.read_max - self.read_pos, buf.len());
-        unsafe {
-            do buf.as_mut_buf |p_dst, _len_dst| {
-                do self.read_buffer.as_imm_buf |p_src, _len_src| {
-                    // Note that copy_memory works on bytes; good, u8 is byte-sized
-                    ptr::copy_memory(p_dst, ptr::offset(p_src, self.read_pos as int), size)
-                }
-            }
-        }
+        vec::bytes::copy_memory(buf, self.read_buffer.slice_from(self.read_pos), size);
         self.read_pos += size;
         Some(size)
     }
@@ -140,7 +133,7 @@ impl<T: Writer> Writer for BufferedStream<T> {
             // This is the lazy approach which may involve multiple writes where it's really not
             // warranted. Maybe deal with that later.
             if self.writing_chunked_body {
-                let s = fmt!("%s\r\n", (self.write_len + buf.len()).to_str_radix(16));
+                let s = format!("{}\r\n", (self.write_len + buf.len()).to_str_radix(16));
                 self.wrapped.write(s.as_bytes());
             }
             if self.write_len > 0 {
@@ -153,20 +146,13 @@ impl<T: Writer> Writer for BufferedStream<T> {
                 self.wrapped.write(bytes!("\r\n"));
             }
         } else {
-            // Safely copy buf onto the "end" of self.buffer
-            unsafe {
-                do buf.as_imm_buf |p_src, len_src| {
-                    do self.write_buffer.as_mut_buf |p_dst, _len_dst| {
-                        // Note that copy_memory works on bytes; good, u8 is byte-sized
-                        ptr::copy_memory(ptr::mut_offset(p_dst, self.write_len as int),
-                                         p_src, len_src)
-                    }
-                }
-            }
+            vec::bytes::copy_memory(self.write_buffer.mut_slice_from(self.write_len),
+                                    buf, buf.len());
+
             self.write_len += buf.len();
             if self.write_len == self.write_buffer.len() {
                 if self.writing_chunked_body {
-                    let s = fmt!("%s\r\n", self.write_len.to_str_radix(16));
+                    let s = format!("{}\r\n", self.write_len.to_str_radix(16));
                     self.wrapped.write(s.as_bytes());
                     self.wrapped.write(self.write_buffer);
                     self.wrapped.write(bytes!("\r\n"));
@@ -181,7 +167,7 @@ impl<T: Writer> Writer for BufferedStream<T> {
     fn flush(&mut self) {
         if self.write_len > 0 {
             if self.writing_chunked_body {
-                let s = fmt!("%s\r\n", self.write_len.to_str_radix(16));
+                let s = format!("{}\r\n", self.write_len.to_str_radix(16));
                 self.wrapped.write(s.as_bytes());
             }
             self.wrapped.write(self.write_buffer.slice_to(self.write_len));
