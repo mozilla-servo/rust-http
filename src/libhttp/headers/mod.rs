@@ -1090,7 +1090,7 @@ headers_mod! {
 
     // RFC 2616, Section 6.2: Response Header Fields
      9, "Accept-Patch",       "Accept-Patch",       AcceptPatch,       accept_patch,       ~str;
-    10, "Accept-Ranges",      "Accept-Ranges",      AcceptRanges,      accept_ranges,      headers::accept_ranges::AcceptRanges;
+    10, "Accept-Ranges",      "Accept-Ranges",      AcceptableRanges,  accept_ranges,      headers::accept_ranges::AcceptableRanges;
     11, "Age",                "Age",                Age,               age,                ~str;
     12, "ETag",               "Etag",               ETag,              etag,               headers::etag::EntityTag;
     13, "Location",           "Location",           Location,          location,           extra::url::Url;

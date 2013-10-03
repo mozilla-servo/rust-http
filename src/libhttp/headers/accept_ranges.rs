@@ -17,9 +17,9 @@ pub enum AcceptableRanges {
     NoAcceptableRanges,
 }
 
-impl super::HeaderConvertible for AcceptRanges {
+impl super::HeaderConvertible for AcceptableRanges {
     fn from_stream<T: Reader>(reader: &mut super::HeaderValueByteIterator<T>)
-            -> Option<AcceptRanges> {
+            -> Option<AcceptableRanges> {
         let mut range_units = ~[];
         loop {
             match reader.read_token() {
