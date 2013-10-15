@@ -60,7 +60,7 @@ pub trait WriterUtil {
     fn write_parameter(&mut self, k: &str, v: &str);
     // TODO: &Str instead of ~str?
     fn write_parameters(&mut self, parameters: &[(~str, ~str)]);
-    fn write_quality(&mut self, quality: Option<float>);
+    fn write_quality(&mut self, quality: Option<f64>);
     fn write_token(&mut self, token: &str);
 }
 
@@ -98,7 +98,7 @@ impl<W: Writer> WriterUtil for W {
         }
     }
 
-    fn write_quality(&mut self, quality: Option<float>) {
+    fn write_quality(&mut self, quality: Option<f64>) {
         // TODO: remove second and third decimal places if zero, and use a better quality type anyway
         match quality {
             Some(qvalue) => {
@@ -130,7 +130,7 @@ pub fn comma_join(values: &[&str]) -> ~str {
     values.connect(", ")
 }
 
-pub fn push_quality(mut s: ~str, quality: Option<float>) -> ~str {
+pub fn push_quality(mut s: ~str, quality: Option<f64>) -> ~str {
     // TODO: remove second and third decimal places if zero, and use a better quality type anyway
     match quality {
         Some(qvalue) => {
@@ -230,7 +230,10 @@ pub fn push_parameters(mut s: ~str, parameters: &[(~str, ~str)]) -> ~str {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{normalise_header_name, comma_split, comma_split_iter, comma_join,
+                push_quality, push_parameter, push_parameters,
+                push_maybe_quoted_string, push_quoted_string, maybe_quoted_string, quoted_string,
+                unquote_string, maybe_unquote_string};
 
     #[test]
     #[should_fail]
@@ -290,10 +293,10 @@ mod test {
     #[test]
     fn test_push_quality() {
         assert_eq!(push_quality(~"foo", None), ~"foo");
-        assert_eq!(push_quality(~"foo", Some(0f)), ~"foo;q=0.000");
-        assert_eq!(push_quality(~"foo", Some(0.1f)), ~"foo;q=0.100");
-        assert_eq!(push_quality(~"foo", Some(0.123456789f)), ~"foo;q=0.123");
-        assert_eq!(push_quality(~"foo", Some(1f)), ~"foo;q=1.000");
+        assert_eq!(push_quality(~"foo", Some(0f64)), ~"foo;q=0.000");
+        assert_eq!(push_quality(~"foo", Some(0.1f64)), ~"foo;q=0.100");
+        assert_eq!(push_quality(~"foo", Some(0.123456789f64)), ~"foo;q=0.123");
+        assert_eq!(push_quality(~"foo", Some(1f64)), ~"foo;q=1.000");
     }
 
     #[test]
