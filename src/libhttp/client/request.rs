@@ -203,8 +203,15 @@ impl RequestWriter<TcpStream> {
         // TODO: get to the point where we can say HTTP/1.1 with good conscience
         // XXX: Rust's current lack of statement-duration lifetime handling prevents this from being
         // one statement ("error: borrowed value does not live long enough")
-        // TODO: don't send the entire URL; just url.{path, query}
-        let s = format!("{} {} HTTP/1.0\r\n", self.method.to_str(), self.url.to_str());
+        let s = format!("{} {}{}{} HTTP/1.0\r\n",
+                        self.method.to_str(),
+                        self.url.path,
+                        if self.url.query.len() > 0 {
+                            "?"
+                        } else {
+                            ""
+                        },
+                        self.url.query.to_str());
         self.stream.write(s.as_bytes());
 
         self.headers.write_all(&mut self.stream);
