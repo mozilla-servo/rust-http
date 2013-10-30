@@ -1,8 +1,9 @@
 use super::branchify::generate_branchified_method;
 use super::get_writer;
+use std::rt::io::Writer;
 
 pub fn generate(output_dir: &Path) {
-    let writer = get_writer(output_dir, "read_method.rs");
+    let mut writer = get_writer(output_dir, "read_method.rs");
     writer.write(bytes!("\
 // This automatically generated file is included in request.rs.
 {

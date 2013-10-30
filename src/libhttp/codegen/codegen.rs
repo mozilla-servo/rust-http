@@ -1,6 +1,7 @@
 #[feature(macro_rules)];
 
-use std::io::{file_writer, Create, Truncate};
+use std::rt::io::{Writer, CreateOrTruncate};
+use std::rt::io::file::FileInfo;
 use std::os;
 
 pub mod branchify;
@@ -35,11 +36,11 @@ fn main() {
     }
 }
 
-pub fn get_writer(output_dir: &Path, filename: &str) -> @Writer {
-    let mut output_dir = output_dir.clone();
-    output_dir.push(filename);
-    match file_writer(&output_dir, [Create, Truncate]) {
-        Ok(writer) => writer,
-        Err(msg) => fail!("Unable to write file: %s", msg),
+pub fn get_writer(output_dir: &Path, filename: &str) -> ~Writer {
+    let mut output_file = output_dir.clone();
+    output_file.push(filename);
+    match output_file.open_writer(CreateOrTruncate) {
+        Some(writer) => ~writer as ~Writer,
+        None => fail!("Unable to write file"),
     }
 }
