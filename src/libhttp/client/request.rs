@@ -39,6 +39,7 @@ that's due to a Rust bug; when that's resolved, we'll go back to using just `Req
 
 */
 
+use extra::url;
 use extra::url::Url;
 use method::Method;
 use std::rt::io::{Reader, Writer};
@@ -211,7 +212,7 @@ impl RequestWriter<TcpStream> {
                         } else {
                             ""
                         },
-                        self.url.query.to_str());
+                        url::query_to_str(&self.url.query));
         self.stream.write(s.as_bytes());
 
         self.headers.write_all(&mut self.stream);
