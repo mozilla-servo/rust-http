@@ -1,5 +1,4 @@
 use std::rt::io::{Reader, Stream};
-use std::rt::io::extensions::ReaderUtil;
 use std::rt::io::{io_error, OtherIoError, IoError};
 use client::request::RequestWriter;
 use rfc2616::{CR, LF, SP};
@@ -108,7 +107,7 @@ impl<S: Stream> ResponseReader<S> {
             let mut headers = ~headers::response::HeaderCollection::new();
             loop {
                 let xxx = buffer.read_header::<headers::response::Header>();
-                info!("header = %?", xxx);
+                info!("header = {:?}", xxx);
                 match xxx {
                 //match buffer.read_header::<headers::response::Header>() {
                     Err(EndOfFile) => {
