@@ -1,8 +1,9 @@
 /// Memory buffers for the benefit of `std::io::net` which has slow read/write.
 
-use std::io::{Reader, Writer, Stream};
+use std::io::{IoResult, Stream};
 use std::cmp::min;
 use std::vec;
+use std::num::ToStrRadix;
 
 // 64KB chunks (moderately arbitrary)
 static READ_BUF_SIZE: uint = 0x10000;
@@ -55,18 +56,17 @@ impl<T: Reader> BufferedStream<T> {
     }
 
     #[inline]
-    fn fill_buffer(&mut self) -> bool {
+    fn fill_buffer(&mut self) -> IoResult<()> {
         assert_eq!(self.read_pos, self.read_max);
+        self.read_pos = 0;
         match self.wrapped.read(self.read_buffer) {
-            None => {
-                self.read_pos = 0;
-                self.read_max = 0;
-                false
-            },
-            Some(i) => {
-                self.read_pos = 0;
+            Ok(i) => {
                 self.read_max = i;
-                true
+                Ok(())
+            },
+            Err(err) => {
+                self.read_max = 0;
+                Err(err)
             },
         }
     }
@@ -74,13 +74,13 @@ impl<T: Reader> BufferedStream<T> {
     /// Slightly faster implementation of read_byte than that which is provided by ReaderUtil
     /// (which just uses `read()`)
     #[inline]
-    pub fn read_byte(&mut self) -> Option<u8> {
-        if self.read_pos == self.read_max && !self.fill_buffer() {
-            // Run out of buffered content, no more to come
-            return None;
+    pub fn read_byte(&mut self) -> IoResult<u8> {
+        if self.read_pos == self.read_max {
+            // Fill the buffer, giving up if we've run out of buffered content
+            try!(self.fill_buffer());
         }
         self.read_pos += 1;
-        Some(self.read_buffer[self.read_pos - 1])
+        Ok(self.read_buffer[self.read_pos - 1])
     }
 }
 
@@ -90,11 +90,12 @@ impl<T: Writer> BufferedStream<T> {
     ///
     /// At the time of calling this, headers MUST have been written, including the
     /// ending CRLF, or else an invalid HTTP response may be written.
-    pub fn finish_response(&mut self) {
-        self.flush();
+    pub fn finish_response(&mut self) -> IoResult<()> {
+        try!(self.flush());
         if self.writing_chunked_body {
-            self.wrapped.write(bytes!("0\r\n\r\n"));
+            try!(self.wrapped.write(bytes!("0\r\n\r\n")));
         }
+        Ok(())
     }
 }
 
@@ -103,40 +104,35 @@ impl<T: Reader> Reader for BufferedStream<T> {
     ///
     /// At present, this makes no attempt to fill its buffer proactively, instead waiting until you
     /// ask.
-    fn read(&mut self, buf: &mut [u8]) -> Option<uint> {
-        if self.read_pos == self.read_max && !self.fill_buffer() {
-            // Run out of buffered content, no more to come
-            return None;
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+        if self.read_pos == self.read_max {
+            // Fill the buffer, giving up if we've run out of buffered content
+            try!(self.fill_buffer());
         }
         let size = min(self.read_max - self.read_pos, buf.len());
         vec::bytes::copy_memory(buf, self.read_buffer.slice_from(self.read_pos).slice_to(size));
         self.read_pos += size;
-        Some(size)
-    }
-
-    /// Return whether the Reader has reached the end of the stream AND exhausted its buffer.
-    fn eof(&mut self) -> bool {
-        self.read_pos == self.read_max && self.wrapped.eof()
+        Ok(size)
     }
 }
 
 impl<T: Writer> Writer for BufferedStream<T> {
-    fn write(&mut self, buf: &[u8]) {
+    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         if buf.len() + self.write_len > self.write_buffer.len() {
             // This is the lazy approach which may involve multiple writes where it's really not
             // warranted. Maybe deal with that later.
             if self.writing_chunked_body {
                 let s = format!("{}\r\n", (self.write_len + buf.len()).to_str_radix(16));
-                self.wrapped.write(s.as_bytes());
+                try!(self.wrapped.write(s.as_bytes()));
             }
             if self.write_len > 0 {
-                self.wrapped.write(self.write_buffer.slice_to(self.write_len));
+                try!(self.wrapped.write(self.write_buffer.slice_to(self.write_len)));
                 self.write_len = 0;
             }
-            self.wrapped.write(buf);
+            try!(self.wrapped.write(buf));
             self.write_len = 0;
             if self.writing_chunked_body {
-                self.wrapped.write(bytes!("\r\n"));
+                try!(self.wrapped.write(bytes!("\r\n")));
             }
         } else {
             unsafe { self.write_buffer.mut_slice_from(self.write_len).copy_memory(buf); }
@@ -145,29 +141,30 @@ impl<T: Writer> Writer for BufferedStream<T> {
             if self.write_len == self.write_buffer.len() {
                 if self.writing_chunked_body {
                     let s = format!("{}\r\n", self.write_len.to_str_radix(16));
-                    self.wrapped.write(s.as_bytes());
-                    self.wrapped.write(self.write_buffer);
-                    self.wrapped.write(bytes!("\r\n"));
+                    try!(self.wrapped.write(s.as_bytes()));
+                    try!(self.wrapped.write(self.write_buffer));
+                    try!(self.wrapped.write(bytes!("\r\n")));
                 } else {
-                    self.wrapped.write(self.write_buffer);
+                    try!(self.wrapped.write(self.write_buffer));
                 }
                 self.write_len = 0;
             }
         }
+        Ok(())
     }
 
-    fn flush(&mut self) {
+    fn flush(&mut self) -> IoResult<()> {
         if self.write_len > 0 {
             if self.writing_chunked_body {
                 let s = format!("{}\r\n", self.write_len.to_str_radix(16));
-                self.wrapped.write(s.as_bytes());
+                try!(self.wrapped.write(s.as_bytes()));
             }
-            self.wrapped.write(self.write_buffer.slice_to(self.write_len));
+            try!(self.wrapped.write(self.write_buffer.slice_to(self.write_len)));
             if self.writing_chunked_body {
-                self.wrapped.write(bytes!("\r\n"));
+                try!(self.wrapped.write(bytes!("\r\n")));
             }
             self.write_len = 0;
         }
-        self.wrapped.flush();
+        self.wrapped.flush()
     }
 }

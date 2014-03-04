@@ -4,12 +4,12 @@
 
 #[crate_id = "apache_fake"];
 
-extern mod extra;
-extern mod http;
+extern crate extra;
+extern crate time;
+extern crate http;
 
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
 use std::io::Writer;
-use extra::time;
 
 use http::server::{Config, Server, Request, ResponseWriter};
 use http::headers;
@@ -58,7 +58,7 @@ impl Server for ApacheFakeServer {
             <html><body><h1>It works!</h1>\n\
             <p>This is the default web page for this server.</p>\n\
             <p>The web server software is running but no content has been added, yet.</p>\n\
-            </body></html>\n"));
+            </body></html>\n")).unwrap();
     }
 }
 

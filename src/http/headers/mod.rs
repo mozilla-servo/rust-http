@@ -4,8 +4,8 @@
 //! known HTTP headers are type checked, rather than being dealt with as strings all the time. Only
 //! unknown headers are stored in a map in the traditional way.
 
-use std::io::{Reader, Writer};
-use extra::time::{Tm, strptime};
+use std::io::IoResult;
+use time::{Tm, strptime};
 use extra::url::Url;
 use rfc2616::{is_token_item, is_separator, CR, LF, SP, HT, COLON};
 use method::Method;
@@ -72,7 +72,7 @@ pub enum ConsumeCommaLWSResult {
 pub trait HeaderEnum {
     fn header_name(&self) -> ~str;
     fn header_value(&self) -> ~str;
-    fn write_header<T: Writer>(&self, writer: &mut T);
+    fn write_header<W: Writer>(&self, writer: &mut W) -> IoResult<()>;
 
     // FIXME: this method combination is temporary, to be merged with an efficient parser like that
     // of the request line. Also refactor to remove the need to return the next byte too.
@@ -87,7 +87,7 @@ pub trait HeaderEnum {
     //REMOVED BECAUSE OF ICE:
     //fn from_stream<T: Reader>(reader: &mut T) -> (Result<Self, HeaderLineErr>, Option<u8>) { ... }
 
-    fn value_from_stream<T: Reader>(name: ~str, input: &mut HeaderValueByteIterator<T>)
+    fn value_from_stream<R: Reader>(name: ~str, input: &mut HeaderValueByteIterator<R>)
         -> Option<Self>;
 }
 
@@ -99,19 +99,19 @@ pub fn header_enum_from_stream<R: Reader, E: HeaderEnum>(reader: &mut R)
     let mut header_name = ~"";
     loop {
         state = match (state, reader.read_byte()) {
-            (Start, Some(b)) | (ReadingName, Some(b)) if is_token_item(b) => {
+            (Start, Ok(b)) | (ReadingName, Ok(b)) if is_token_item(b) => {
                 header_name.push_char(b as char);
                 ReadingName
             },
             // TODO: check up on the rules for a line like "Name : value". Full LWS?
-            (Start, Some(b)) if b == CR => GotCR,
-            (Start, Some(b)) | (GotCR, Some(b)) if b == LF => {
+            (Start, Ok(b)) if b == CR => GotCR,
+            (Start, Ok(b)) | (GotCR, Ok(b)) if b == LF => {
                 return (Err(EndOfHeaders), None);
             },
-            (_, Some(b)) if b == SP => NameFinished,
-            (_, Some(b)) if b == COLON => break,
-            (_, Some(_)) => return (Err(MalformedHeaderSyntax), None),
-            (_, None) => return (Err(EndOfFile), None),
+            (_, Ok(b)) if b == SP => NameFinished,
+            (_, Ok(b)) if b == COLON => break,
+            (_, Ok(_)) => return (Err(MalformedHeaderSyntax), None),
+            (_, Err(_)) => return (Err(EndOfFile), None),
         }
     }
     let mut iter = HeaderValueByteIterator::new(reader);
@@ -139,8 +139,8 @@ enum HeaderValueByteIteratorState {
 /// This ensures one cannot read past the end of a header mistakenly and that linear white space is
 /// handled correctly so that nothing else needs to worry about it. Any linear whitespace (multiple
 /// spaces outside of a quoted-string) is compacted into a single SP.
-pub struct HeaderValueByteIterator<'r, R> {
-    reader: &'r mut R,
+pub struct HeaderValueByteIterator<'a, R> {
+    reader: &'a mut R,
 
     /// This field serves two purposes. *During* iteration, it will typically be ``None``, but
     /// certain cases will cause it to be a ``Some``, meaning that the next ``next()`` call will
@@ -154,9 +154,9 @@ pub struct HeaderValueByteIterator<'r, R> {
     state: HeaderValueByteIteratorState,
 }
 
-impl<'r, R: Reader> HeaderValueByteIterator<'r, R> {
+impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
 
-    pub fn new(reader: &'r mut R) -> HeaderValueByteIterator<'r, R> {
+    pub fn new(reader: &'a mut R) -> HeaderValueByteIterator<'a, R> {
         HeaderValueByteIterator {
             reader: reader,
             next_byte: None,
@@ -437,7 +437,7 @@ impl<'r, R: Reader> HeaderValueByteIterator<'r, R> {
     }
 }
 
-impl<'r, R: Reader> Iterator<u8> for HeaderValueByteIterator<'r, R> {
+impl<'a, R: Reader> Iterator<u8> for HeaderValueByteIterator<'a, R> {
     fn next(&mut self) -> Option<u8> {
         if self.state == Finished {
             return None;
@@ -449,12 +449,14 @@ impl<'r, R: Reader> Iterator<u8> for HeaderValueByteIterator<'r, R> {
                     b
                 },
                 None => match self.reader.read_byte() {
-                    None => {
-                        // EOF; not a friendly reader :-(. Let's just call that the end.
+                    Err(_) => {
+                        // Probably EOF; not a friendly reader :-(.
+                        // Let's just call that the end. And sorry—your IoError
+                        // is being concealed. Such is life with Iterator.
                         self.state = Finished;
                         return None
                     },
-                    Some(b) => b,
+                    Ok(b) => b,
                 }
             };
             match self.state {
@@ -528,7 +530,7 @@ pub trait HeaderConvertible: Eq + Clone {
      * (This is not provided as a default implementation as owing to present upstream limitations
      * that would require the type to implement FromStr also, which is not considered reasonable.)
      */
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<Self>;
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Self>;
 
     /**
      * Write the HTTP value of the header to the stream.
@@ -536,9 +538,9 @@ pub trait HeaderConvertible: Eq + Clone {
      * The default implementation uses the ``http_value`` method; for now, this should tend to be
      * enough, but there may be more efficient ways to do it in certain cases.
      */
-    fn to_stream<T: Writer>(&self, writer: &mut T) {
+    fn to_stream<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
         let s = self.http_value();
-        writer.write(s.as_bytes());
+        writer.write(s.as_bytes())
     }
 
     /**
@@ -571,13 +573,14 @@ impl<T: CommaListHeaderConvertible> HeaderConvertible for ~[T] {
         Some(result)
     }
 
-    fn to_stream<W: Writer>(&self, writer: &mut W) {
+    fn to_stream<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
         for (i, item) in self.iter().enumerate() {
             if i != 0 {
-                writer.write(bytes!(", "));
+                try!(writer.write(bytes!(", ")))
             }
-            item.to_stream(writer);
+            try!(item.to_stream(writer))
         }
+        Ok(())
     }
 
     fn http_value(&self) -> ~str {
@@ -595,12 +598,12 @@ impl<T: CommaListHeaderConvertible> HeaderConvertible for ~[T] {
 // Now let's have some common implementation types.
 // Some header types really are arbitrary strings. Let's cover that case here.
 impl HeaderConvertible for ~str {
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<~str> {
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<~str> {
         Some(reader.collect_to_str())
     }
 
-    fn to_stream<T: Writer>(&self, writer: &mut T) {
-        writer.write(self.as_bytes());
+    fn to_stream<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
+        writer.write(self.as_bytes())
     }
 
     fn http_value(&self) -> ~str {
@@ -609,7 +612,7 @@ impl HeaderConvertible for ~str {
 }
 
 impl HeaderConvertible for uint {
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<uint> {
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<uint> {
         from_str(reader.collect_to_str())
     }
 
@@ -619,7 +622,7 @@ impl HeaderConvertible for uint {
 }
 
 impl HeaderConvertible for Url {
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<Url> {
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Url> {
         from_str(reader.collect_to_str())
     }
 
@@ -631,7 +634,7 @@ impl HeaderConvertible for Url {
 impl CommaListHeaderConvertible for Method {}
 
 impl HeaderConvertible for Method {
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<Method> {
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Method> {
         match reader.read_token() {
             Some(s) => Method::from_str_or_new(s),
             None => None,
@@ -702,7 +705,7 @@ impl HeaderConvertible for Method {
  *    logging, etc.
  */
 impl HeaderConvertible for Tm {
-    fn from_stream<T: Reader>(reader: &mut HeaderValueByteIterator<T>) -> Option<Tm> {
+    fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Tm> {
         let value = reader.collect_to_str();
 
         // XXX: %Z actually ignores any timezone other than UTC. Probably not a good idea?
@@ -722,11 +725,6 @@ impl HeaderConvertible for Tm {
         }
     }
 
-    fn to_stream<T: Writer>(&self, writer: &mut T) {
-        let s = self.to_utc().strftime("%a, %d %b %Y %T GMT");
-        writer.write(s.as_bytes());
-    }
-
     fn http_value(&self) -> ~str {
         self.to_utc().strftime("%a, %d %b %Y %T GMT")
     }
@@ -734,8 +732,9 @@ impl HeaderConvertible for Tm {
 
 #[cfg(test)]
 mod test {
-    use extra::time::Tm;
+    use time::Tm;
     use headers::test_utils::{from_stream_with_str, to_stream_into_str};
+    use super::HeaderConvertible;
 
     #[test]
     fn test_from_stream_str() {
@@ -871,9 +870,11 @@ macro_rules! headers_mod {
             //$($attrs;)*
             $attr;
 
+            #[allow(unused_imports)];
+            use std::io::IoResult;
             use extra;
-            use std::io::{Reader, Writer};
-            use extra::treemap::{TreeMap, TreeMapIterator};
+            use time;
+            use collections::treemap::{TreeMap, Entries};
             use headers;
             use headers::{HeaderEnum, HeaderConvertible, HeaderValueByteIterator};
 
@@ -882,19 +883,10 @@ macro_rules! headers_mod {
                 ExtensionHeader(~str, ~str),
             }
 
-            // Can't use #[deriving(Clone)] because of https://github.com/mozilla/rust/issues/6976
+            #[deriving(Clone)]
             pub struct HeaderCollection {
                 $($lower_ident: Option<$htype>,)*
                 extensions: TreeMap<~str, ~str>,
-            }
-
-            impl Clone for HeaderCollection {
-                fn clone(&self) -> HeaderCollection {
-                    HeaderCollection {
-                        $($lower_ident: self.$lower_ident.clone(),)*
-                        extensions: self.extensions.clone(),
-                    }
-                }
             }
 
             impl HeaderCollection {
@@ -923,18 +915,18 @@ macro_rules! headers_mod {
 
                 /// Write all the headers to a writer. This includes an extra \r\n at the end to
                 /// signal end of headers.
-                pub fn write_all<W: Writer>(&self, writer: &mut W) {
+                pub fn write_all<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
                     for header in self.iter() {
-                        header.write_header(writer);
+                        try!(header.write_header(&mut *writer));
                     }
-                    writer.write(bytes!("\r\n"));
+                    writer.write(bytes!("\r\n"))
                 }
             }
 
             pub struct HeaderCollectionIterator<'a> {
                 pos: uint,
                 coll: &'a HeaderCollection,
-                ext_iter: Option<TreeMapIterator<'a, ~str, ~str>>
+                ext_iter: Option<Entries<'a, ~str, ~str>>
             }
 
             impl<'a> Iterator<Header> for HeaderCollectionIterator<'a> {
@@ -976,39 +968,29 @@ macro_rules! headers_mod {
                     }
                 }
 
-                fn write_header<T: Writer>(&self, writer: &mut T) {
+                fn write_header<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
                     match *self {
                         ExtensionHeader(ref name, ref value) => {
-                            // TODO: be more efficient
-                            let mut s = ~"";
-                            // Allocate for name, ": " and quoted value (typically an overallocation
-                            // of 2 bytes, occasionally an underallocation in case of needing to
-                            // escape double quotes)
-                            s.reserve(name.len() + 4 + value.len());
-                            s.push_str(*name);
-                            s.push_str(": ");
-                            s.push_str(*value);
-                            writer.write(s.as_bytes());
-                            writer.write(bytes!("\r\n"));
-                            return
+                            return write!(&mut *writer as &mut Writer,
+                                          "{}: {}\r\n", *name, *value);
                         },
                         _ => (),
                     }
 
-                    writer.write(match *self {
-                        $($caps_ident(_) => bytes!($output_name, ": "),)*
+                    try!(write!(&mut *writer as &mut Writer, "{}: ", match *self {
+                        $($caps_ident(_) => $output_name,)*
                         ExtensionHeader(..) => unreachable!(),  // Already returned
-                    });
+                    }));
 
                     // FIXME: all the `h` cases satisfy HeaderConvertible, can it be simplified?
-                    match *self {
+                    try!(match *self {
                         $($caps_ident(ref h) => h.to_stream(writer),)*
                         ExtensionHeader(..) => unreachable!(),  // Already returned
-                    };
-                    writer.write(bytes!("\r\n"));
+                    });
+                    write!(&mut *writer as &mut Writer, "\r\n")
                 }
 
-                fn value_from_stream<T: Reader>(name: ~str, value: &mut HeaderValueByteIterator<T>)
+                fn value_from_stream<R: Reader>(name: ~str, value: &mut HeaderValueByteIterator<R>)
                         -> Option<Header> {
                     match name.as_slice() {
                         $($input_name => match HeaderConvertible::from_stream(value) {
@@ -1032,7 +1014,7 @@ headers_mod! {
     // RFC 2616, Section 4.5: General Header Fields
      0, "Cache-Control",     "Cache-Control",     CacheControl,     cache_control,     ~str;
      1, "Connection",        "Connection",        Connection,       connection,        ~[headers::connection::Connection];
-     2, "Date",              "Date",              Date,             date,              extra::time::Tm;
+     2, "Date",              "Date",              Date,             date,              time::Tm;
      3, "Pragma",            "Pragma",            Pragma,           pragma,            ~str;
      4, "Trailer",           "Trailer",           Trailer,          trailer,           ~str;
      5, "Transfer-Encoding", "Transfer-Encoding", TransferEncoding, transfer_encoding, ~[headers::transfer_encoding::TransferCoding];
@@ -1050,10 +1032,10 @@ headers_mod! {
     15, "From",                "From",                From,               from,                ~str;
     16, "Host",                "Host",                Host,               host,                headers::host::Host;
     17, "If-Match",            "If-Match",            IfMatch,            if_match,            ~str;
-    18, "If-Modified-Since",   "If-Modified-Since",   IfModifiedSince,    if_modified_since,   extra::time::Tm;
+    18, "If-Modified-Since",   "If-Modified-Since",   IfModifiedSince,    if_modified_since,   time::Tm;
     19, "If-None-Match",       "If-None-Match",       IfNoneMatch,        if_none_match,       ~str;
     20, "If-Range",            "If-Range",            IfRange,            if_range,            ~str;
-    21, "If-Unmodified-Since", "If-Unmodified-Since", IfUnmodifiedSince,  if_unmodifiedSince,  extra::time::Tm;
+    21, "If-Unmodified-Since", "If-Unmodified-Since", IfUnmodifiedSince,  if_unmodified_since, time::Tm;
     22, "Max-Forwards",        "Max-Forwards",        MaxForwards,        max_forwards,        uint;
     23, "Proxy-Authorization", "Proxy-Authorization", ProxyAuthorization, proxy_authorization, ~str;
     24, "Range",               "Range",               Range,              range,               ~str;
@@ -1070,8 +1052,8 @@ headers_mod! {
     33, "Content-MD5",      "Content-Md5",      ContentMd5,      content_md5,      ~str;
     34, "Content-Range",    "Content-Range",    ContentRange,    content_range,    ~str;
     35, "Content-Type",     "Content-Type",     ContentType,     content_type,     headers::content_type::MediaType;
-    36, "Expires",          "Expires",          Expires,         expires,          extra::time::Tm;
-    37, "Last-Modified",    "Last-Modified",    LastModified,    last_modified,    extra::time::Tm;
+    36, "Expires",          "Expires",          Expires,         expires,          time::Tm;
+    37, "Last-Modified",    "Last-Modified",    LastModified,    last_modified,    time::Tm;
 }
 
 headers_mod! {
@@ -1083,7 +1065,7 @@ headers_mod! {
     // RFC 2616, Section 4.5: General Header Fields
      0, "Cache-Control",     "Cache-Control",     CacheControl,     cache_control,     ~str;
      1, "Connection",        "Connection",        Connection,       connection,        ~[headers::connection::Connection];
-     2, "Date",              "Date",              Date,             date,              extra::time::Tm;
+     2, "Date",              "Date",              Date,             date,              time::Tm;
      3, "Pragma",            "Pragma",            Pragma,           pragma,            ~str;
      4, "Trailer",           "Trailer",           Trailer,          trailer,           ~str;
      5, "Transfer-Encoding", "Transfer-Encoding", TransferEncoding, transfer_encoding, ~[headers::transfer_encoding::TransferCoding];
@@ -1113,5 +1095,5 @@ headers_mod! {
     25, "Content-Range",    "Content-Range",    ContentRange,    content_range,    ~str;
     26, "Content-Type",     "Content-Type",     ContentType,     content_type,     headers::content_type::MediaType;
     27, "Expires",          "Expires",          Expires,         expires,          ~str; // TODO: Should be Tm
-    28, "Last-Modified",    "Last-Modified",    LastModified,    last_modified,    extra::time::Tm;
+    28, "Last-Modified",    "Last-Modified",    LastModified,    last_modified,    time::Tm;
 }

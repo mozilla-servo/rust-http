@@ -13,6 +13,15 @@ This project has two parts:
 Both are in progress; both have basic, low-level implementations in place.
 Neither is complete nor yet compliant in any way.
 
+Rust versions
+-------------
+
+I urge you to track Rust master as rust-http does, but if you really are set on
+using Rust 0.9, you can use the [`rust-0.9-compatible`
+branch](https://github.com/chris-morgan/rust-http/commits/rust-0.9-compatible).
+It is not maintained, however; it's just the last commit that *will* work on
+Rust 0.9.
+
 Goals
 -----
 
@@ -48,11 +57,11 @@ Build everything::
 
 Run one of the servers::
 
-   build/examples/apache_fake
+   build/examples/server/apache_fake
 
 To run the client example, start one of the servers and run::
 
-   build/examples/client/client
+   build/examples/client http://127.0.0.1:8001/
 
 At present, all of the example servers serve to http://127.0.0.1:8001/.
 

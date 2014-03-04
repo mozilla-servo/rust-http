@@ -2,7 +2,10 @@
 
 #[comment = "Rust HTTP server"];
 #[license = "MIT/ASL2"];
-#[crate_type = "lib"];
+#[crate_type = "dylib"];
+#[crate_type = "rlib"];
+
+#[doc(html_root_url = "http://www.rust-ci.org/chris-morgan/rust-http/doc/")];
 
 #[deny(non_camel_case_types)];
 //#[deny(missing_doc)];
@@ -10,11 +13,14 @@
 #[feature(macro_rules)];
 #[macro_escape];
 
-extern mod extra;
+extern crate extra;
+extern crate time;
+extern crate collections;
 
 pub mod buffer;
 pub mod client;
 pub mod common;
+pub mod connecter;
 pub mod server;
 pub mod method;
 pub mod headers;
