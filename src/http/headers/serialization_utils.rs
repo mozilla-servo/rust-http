@@ -2,7 +2,7 @@
 
 use std::vec;
 use std::ascii::Ascii;
-use std::io::Writer;
+use std::io::IoResult;
 use rfc2616::is_token;
 
 /// Normalise an HTTP header name.
@@ -50,61 +50,56 @@ pub fn comma_split(value: &str) -> ~[~str] {
 }
 
 pub fn comma_split_iter<'a>(value: &'a str)
-        -> ::std::iter::Map<'a, &'a str, &'a str, ::std::str::CharSplitIterator<'a, char>> {
+        -> ::std::iter::Map<'a, &'a str, &'a str, ::std::str::CharSplits<'a, char>> {
     value.split(',').map(|w| w.trim_left())
 }
 
 pub trait WriterUtil: Writer {
-    fn write_maybe_quoted_string(&mut self, s: &str) {
+    fn write_maybe_quoted_string(&mut self, s: &str) -> IoResult<()> {
         if is_token(s) {
-            self.write(s.as_bytes());
+            self.write(s.as_bytes())
         } else {
-            self.write_quoted_string(s);
+            self.write_quoted_string(s)
         }
     }
 
-    fn write_quoted_string(&mut self, s: &str) {
-        self.write(['"' as u8]);
+    fn write_quoted_string(&mut self, s: &str) -> IoResult<()> {
+        try!(self.write(['"' as u8]));
         for b in s.bytes() {
             if b == '\\' as u8 || b == '"' as u8 {
-                self.write(['\\' as u8]);
+                try!(self.write(['\\' as u8]));
             }
-            self.write([b]);
+            try!(self.write([b]));
         }
-        self.write(['"' as u8]);
+        self.write(['"' as u8])
     }
 
-    fn write_parameter(&mut self, k: &str, v: &str) {
-        self.write(k.as_bytes());
-        self.write(['=' as u8]);
-        self.write_maybe_quoted_string(v);
+    fn write_parameter(&mut self, k: &str, v: &str) -> IoResult<()> {
+        try!(self.write(k.as_bytes()));
+        try!(self.write(['=' as u8]));
+        self.write_maybe_quoted_string(v)
     }
 
-    // TODO: &Str instead of ~str?
-    fn write_parameters(&mut self, parameters: &[(~str, ~str)]) {
+    fn write_parameters<K: Str, V: Str>(&mut self, parameters: &[(K, V)]) -> IoResult<()> {
         for &(ref k, ref v) in parameters.iter() {
-            self.write([';' as u8]);
-            self.write_parameter(*k, *v);
+            try!(self.write([';' as u8]));
+            try!(self.write_parameter(k.as_slice(), v.as_slice()));
         }
+        Ok(())
     }
 
-    fn write_quality(&mut self, quality: Option<f64>) {
+    fn write_quality(&mut self, quality: Option<f64>) -> IoResult<()> {
         // TODO: remove second and third decimal places if zero, and use a better quality type anyway
         match quality {
-            Some(qvalue) => {
-                self.write(bytes!(";q="));
-                // TODO: don't use format! for this!
-                let s = format!("{:0.3f}", qvalue);
-                self.write(s.as_bytes());
-            },
-            None => (),
+            Some(qvalue) => write!(&mut *self, ";q={:0.3f}", qvalue),
+            None => Ok(()),
         }
     }
 
     #[inline]
-    fn write_token(&mut self, token: &str) {
+    fn write_token(&mut self, token: &str) -> IoResult<()> {
         assert!(is_token(token));
-        self.write(token.as_bytes());
+        self.write(token.as_bytes())
     }
 }
 
@@ -155,7 +150,7 @@ pub fn maybe_quoted_string(s: ~str) -> ~str {
 /// Quote a string, to turn it into an RFC 2616 quoted-string
 pub fn push_quoted_string(mut s: ~str, t: &str) -> ~str {
     let i = s.len();
-    s.reserve_at_least(i + t.len() + 2);
+    s.reserve(i + t.len() + 2);
     s.push_char('"');
     for c in t.chars() {
         if c == '\\' || c == '"' {
@@ -211,11 +206,10 @@ pub fn push_parameter(mut s: ~str, k: &str, v: &str) -> ~str {
     push_maybe_quoted_string(s, v)
 }
 
-// TODO: &Str instead of ~str?
-pub fn push_parameters(mut s: ~str, parameters: &[(~str, ~str)]) -> ~str {
+pub fn push_parameters<K: Str, V: Str>(mut s: ~str, parameters: &[(K, V)]) -> ~str {
     for &(ref k, ref v) in parameters.iter() {
         s.push_char(';');
-        s = push_parameter(s, *k, *v);
+        s = push_parameter(s, k.as_slice(), v.as_slice());
     }
     s
 }
@@ -348,14 +342,14 @@ mod test {
 
     #[test]
     fn test_push_parameters() {
-        assert_eq!(push_parameters(~"foo", []), ~"foo");
-        assert_eq!(push_parameters(~"foo", [(~"bar", ~"baz")]), ~"foo;bar=baz");
-        assert_eq!(push_parameters(~"foo", [(~"bar", ~"baz/quux")]), ~"foo;bar=\"baz/quux\"");
-        assert_eq!(push_parameters(~"foo", [(~"bar", ~"baz"), (~"quux", ~"fuzz")]),
+        assert_eq!(push_parameters::<&str, &str>(~"foo", []), ~"foo");
+        assert_eq!(push_parameters(~"foo", [("bar", "baz")]), ~"foo;bar=baz");
+        assert_eq!(push_parameters(~"foo", [("bar", "baz/quux")]), ~"foo;bar=\"baz/quux\"");
+        assert_eq!(push_parameters(~"foo", [("bar", "baz"), ("quux", "fuzz")]),
                    ~"foo;bar=baz;quux=fuzz");
-        assert_eq!(push_parameters(~"foo", [(~"bar", ~"baz"), (~"quux", ~"fuzz zee")]),
+        assert_eq!(push_parameters(~"foo", [("bar", "baz"), ("quux", "fuzz zee")]),
                    ~"foo;bar=baz;quux=\"fuzz zee\"");
-        assert_eq!(push_parameters(~"foo", [(~"bar", ~"baz/quux"), (~"fuzz", ~"zee")]),
+        assert_eq!(push_parameters(~"foo", [("bar", "baz/quux"), ("fuzz", "zee")]),
                    ~"foo;bar=\"baz/quux\";fuzz=zee");
     }
 }

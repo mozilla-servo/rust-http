@@ -6,12 +6,12 @@
 
 #[crate_id = "request_uri"];
 
-extern mod extra;
-extern mod http;
+extern crate extra;
+extern crate time;
+extern crate http;
 
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
 use std::io::Writer;
-use extra::time;
 
 use http::server::{Config, Server, Request, ResponseWriter};
 use http::server::request::{Star, AbsoluteUri, AbsolutePath, Authority};
@@ -65,7 +65,7 @@ impl Server for RequestUriServer {
             parameters: ~[]
         });
 
-        w.write(bytes!("<!DOCTYPE html><title>Rust HTTP server</title>"));
+        w.write(bytes!("<!DOCTYPE html><title>Rust HTTP server</title>")).unwrap();
 
         match r.request_uri {
             Star | Authority(_) => {

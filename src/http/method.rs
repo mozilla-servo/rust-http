@@ -1,4 +1,5 @@
 use std::fmt;
+use std::from_str::FromStr;
 
 /// HTTP methods, as defined in RFC 2616, §5.1.1.
 ///
@@ -17,24 +18,6 @@ pub enum Method {
     ExtensionMethod(~str),
 }
 
-impl ToStr for Method {
-    /// Get the proper name of a method, e.g. `Get.to_str() == ~"GET"`
-    fn to_str(&self) -> ~str {
-        match *self {
-            Options                => ~"OPTIONS",
-            Get                    => ~"GET",
-            Head                   => ~"HEAD",
-            Post                   => ~"POST",
-            Put                    => ~"PUT",
-            Delete                 => ~"DELETE",
-            Trace                  => ~"TRACE",
-            Connect                => ~"CONNECT",
-            Patch                  => ~"PATCH",
-            ExtensionMethod(ref s) => (*s).clone(),
-        }
-    }
-}
-
 impl FromStr for Method {
     /**
      * Get a *known* `Method` from an *ASCII* string, regardless of case.
@@ -44,7 +27,7 @@ impl FromStr for Method {
      * (If the string isn't ASCII, this will at present fail: TODO fix that.)
      */
     fn from_str(method: &str) -> Option<Method> {
-        if (!method.is_ascii()) {
+        if !method.is_ascii() {
             return None;
         }
         match method {
@@ -62,18 +45,18 @@ impl FromStr for Method {
     }
 }
 
-impl fmt::Default for Method {
-    fn fmt(s: &Method, f: &mut fmt::Formatter) {
-        f.buf.write(match *s {
-            Options                => bytes!("OPTIONS"),
-            Get                    => bytes!("GET"),
-            Head                   => bytes!("HEAD"),
-            Post                   => bytes!("POST"),
-            Put                    => bytes!("PUT"),
-            Delete                 => bytes!("DELETE"),
-            Trace                  => bytes!("TRACE"),
-            Connect                => bytes!("CONNECT"),
-            Patch                  => bytes!("PATCH"),
+impl fmt::Show for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.buf.write(match *self {
+            Options                => "OPTIONS".as_bytes(),
+            Get                    => "GET".as_bytes(),
+            Head                   => "HEAD".as_bytes(),
+            Post                   => "POST".as_bytes(),
+            Put                    => "PUT".as_bytes(),
+            Delete                 => "DELETE".as_bytes(),
+            Trace                  => "TRACE".as_bytes(),
+            Connect                => "CONNECT".as_bytes(),
+            Patch                  => "PATCH".as_bytes(),
             ExtensionMethod(ref s) => s.as_bytes(),
         })
     }
