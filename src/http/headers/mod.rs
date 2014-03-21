@@ -1026,7 +1026,7 @@ headers_mod! {
     #[doc = "Request whatnottery."]
     pub mod request;
 
-    num_headers: 38;
+    num_headers: 39;
 
     // RFC 2616, Section 4.5: General Header Fields
      0, "Cache-Control",     "cache-control",     CacheControl,     cache_control,     String;
@@ -1071,13 +1071,14 @@ headers_mod! {
     35, "Content-Type",     "content-type",     ContentType,     content_type,     headers::content_type::MediaType;
     36, "Expires",          "expires",          Expires,         expires,          time::Tm;
     37, "Last-Modified",    "last-modified",    LastModified,    last_modified,    time::Tm;
+    38, "Cookie",           "cookie",           Cookie,          cookie,           String;
 }
 
 headers_mod! {
     #[doc = "Response whatnottery."]
     pub mod response;
 
-    num_headers: 29;
+    num_headers: 30;
 
     // RFC 2616, Section 4.5: General Header Fields
      0, "Cache-Control",     "cache-control",     CacheControl,     cache_control,     String;
@@ -1113,4 +1114,7 @@ headers_mod! {
     26, "Content-Type",     "content-type",     ContentType,     content_type,     headers::content_type::MediaType;
     27, "Expires",          "expires",          Expires,         expires,          String; // TODO: Should be Tm
     28, "Last-Modified",    "last-modified",    LastModified,    last_modified,    time::Tm;
+
+    // Set-Cookie
+    29, "Set-Cookie",       "Set-Cookie",       SetCookie,       set_cookie,       String;
 }
