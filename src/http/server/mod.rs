@@ -1,5 +1,3 @@
-extern crate extra;
-
 use std::comm::Chan;
 use std::io::{Listener, Acceptor};
 use std::io::net::ip::SocketAddr;
