@@ -1,4 +1,3 @@
-use std::comm::Chan;
 use std::io::{Listener, Acceptor};
 use std::io::net::ip::SocketAddr;
 use time::precise_time_ns;
@@ -35,7 +34,7 @@ pub trait Server: Send + Clone {
             Ok(acceptor) => acceptor,
         };
         debug!("listening");
-        let (perf_po, perf_ch) = Chan::new();
+        let (perf_ch, perf_po) = channel();
         spawn(proc() {
             perf_dumper(perf_po);
         });
@@ -126,7 +125,7 @@ pub struct Config {
 static PERF_DUMP_FREQUENCY : u64 = 10_000;
 
 /// Simple function to dump out perf stats every `PERF_DUMP_FREQUENCY` requests
-fn perf_dumper(perf_po: Port<(u64, u64, u64, u64, u64)>) {
+fn perf_dumper(perf_po: Receiver<(u64, u64, u64, u64, u64)>) {
     // Total durations
     let mut td_spawn = 0u64;
     let mut td_request = 0u64;
