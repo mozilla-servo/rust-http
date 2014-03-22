@@ -13,6 +13,9 @@
 #[feature(macro_rules)];
 #[macro_escape];
 
+#[feature(phase)];
+#[phase(syntax, link)] extern crate log;
+
 extern crate time;
 extern crate collections;
 extern crate url;
