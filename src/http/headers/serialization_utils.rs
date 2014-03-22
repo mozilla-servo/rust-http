@@ -1,8 +1,8 @@
 //! Utility functions for assisting with conversion of headers from and to the HTTP text form.
 
-use std::vec;
 use std::ascii::Ascii;
 use std::io::IoResult;
+use std::slice;
 use rfc2616::is_token;
 
 /// Normalise an HTTP header name.
@@ -22,7 +22,7 @@ use rfc2616::is_token;
 /// assert_eq!(normalise_header_name("FOO-BAR"), "Foo-Bar");
 /// ~~~
 pub fn normalise_header_name(name: &str) -> ~str {
-    let mut result: ~[Ascii] = vec::with_capacity(name.len());
+    let mut result: ~[Ascii] = slice::with_capacity(name.len());
     let mut capitalise = true;
     for c in name.chars() {
         let c = match capitalise {

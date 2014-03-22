@@ -2,7 +2,7 @@
 
 use std::io::{IoResult, Stream};
 use std::cmp::min;
-use std::vec;
+use std::slice;
 use std::num::ToStrRadix;
 
 // 64KB chunks (moderately arbitrary)
@@ -25,9 +25,9 @@ pub struct BufferedStream<T> {
 
 impl<T: Stream> BufferedStream<T> {
     pub fn new(stream: T) -> BufferedStream<T> {
-        let mut read_buffer = vec::with_capacity(READ_BUF_SIZE);
+        let mut read_buffer = slice::with_capacity(READ_BUF_SIZE);
         unsafe { read_buffer.set_len(READ_BUF_SIZE); }
-        let mut write_buffer = vec::with_capacity(WRITE_BUF_SIZE);
+        let mut write_buffer = slice::with_capacity(WRITE_BUF_SIZE);
         unsafe { write_buffer.set_len(WRITE_BUF_SIZE); }
         BufferedStream {
             wrapped: stream,
@@ -110,7 +110,7 @@ impl<T: Reader> Reader for BufferedStream<T> {
             try!(self.fill_buffer());
         }
         let size = min(self.read_max - self.read_pos, buf.len());
-        vec::bytes::copy_memory(buf, self.read_buffer.slice_from(self.read_pos).slice_to(size));
+        slice::bytes::copy_memory(buf, self.read_buffer.slice_from(self.read_pos).slice_to(size));
         self.read_pos += size;
         Ok(size)
     }
