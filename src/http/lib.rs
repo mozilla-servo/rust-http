@@ -13,9 +13,9 @@
 #[feature(macro_rules)];
 #[macro_escape];
 
-extern crate extra;
 extern crate time;
 extern crate collections;
+extern crate url;
 
 pub mod buffer;
 pub mod client;
