@@ -1,4 +1,4 @@
-use extra::url::Url;
+use url::Url;
 use method::{Method, Options};
 use status;
 use std::from_str::FromStr;
@@ -6,6 +6,7 @@ use std::io::{Stream, IoResult};
 use std::io::net::ip::SocketAddr;
 use std::io::net::tcp::TcpStream;
 use std::str;
+use std::fmt;
 use rfc2616::{CR, LF, SP};
 use headers;
 use buffer::BufferedStream;
@@ -282,6 +283,17 @@ impl FromStr for RequestUri {
     }
 }
 
+impl fmt::Show for RequestUri {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Star => f.buf.write("*".as_bytes()),
+            AbsoluteUri(ref url) => write!(f.buf, "{}", url),
+            AbsolutePath(ref str) => f.buf.write(str.as_bytes()),
+            Authority(ref str) => f.buf.write(str.as_bytes()),
+        }
+    }
+}
+
 impl Request {
 
     /// Get a response from an open socket.
@@ -360,7 +372,7 @@ impl Request {
         // Read body if its length is specified
         match request.headers.content_length {
             Some(length) => {
-                match buffer.read_bytes(length) {
+                match buffer.read_exact(length) {
                     Ok(body) => match str::from_utf8(body) {
                         Some(body_str) => request.body = body_str.to_owned(),
                         None => return (request, Err(status::BadRequest))

@@ -4,9 +4,10 @@
 
 #[crate_id = "apache_fake"];
 
-extern crate extra;
 extern crate time;
 extern crate http;
+
+use std::vec::Vec;
 
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
 use std::io::Writer;
@@ -44,13 +45,13 @@ impl Server for ApacheFakeServer {
                                 weak: false,
                                 opaque_tag: ~"501b29-b1-4a285ed47404a" });
         w.headers.accept_ranges = Some(headers::accept_ranges::RangeUnits(
-                                            ~[headers::accept_ranges::Bytes]));
+                                            vec!(headers::accept_ranges::Bytes)));
         w.headers.content_length = Some(177);
         w.headers.vary = Some(~"Accept-Encoding");
         w.headers.content_type = Some(headers::content_type::MediaType {
             type_: ~"text",
             subtype: ~"html",
-            parameters: ~[]
+            parameters: Vec::new()
         });
         w.headers.extensions.insert(~"X-Pad", ~"avoid browser bug");
 
