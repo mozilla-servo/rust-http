@@ -1,4 +1,4 @@
-use extra::url::Url;
+use url::Url;
 use method::{Method, Options};
 use status;
 use std::from_str::FromStr;
@@ -360,7 +360,7 @@ impl Request {
         // Read body if its length is specified
         match request.headers.content_length {
             Some(length) => {
-                match buffer.read_bytes(length) {
+                match buffer.read_exact(length) {
                     Ok(body) => match str::from_utf8(body) {
                         Some(body_str) => request.body = body_str.to_owned(),
                         None => return (request, Err(status::BadRequest))

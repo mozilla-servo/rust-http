@@ -36,8 +36,8 @@ let response = match request.read_response() {
 
 */
 
-use extra::url::Url;
-use extra::url;
+use url::Url;
+use url;
 use method::Method;
 use std::io::{IoError, IoResult};
 use std::io::net::get_host_addresses;

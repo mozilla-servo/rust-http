@@ -13,9 +13,12 @@
 #[feature(macro_rules)];
 #[macro_escape];
 
-extern crate extra;
+#[feature(phase)];
+#[phase(syntax, link)] extern crate log;
+
 extern crate time;
 extern crate collections;
+extern crate url;
 
 pub mod buffer;
 pub mod client;
