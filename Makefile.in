@@ -1,46 +1,91 @@
-VPATH=%VPATH%
-
-RUST ?= rust
+SSL_LIB ?= %SSL_LIB%
+SSL_CFG ?= %SSL_CFG%
+ifdef SSL_LIB
+	SSL_CFG += -L "$(SSL_LIB)"
+endif
 RUSTC ?= rustc
-RUSTFLAGS ?= -O
-HOST_RUSTFLAGS ?= -O
+RUSTDOC ?= rustdoc
+RUSTPKG ?= rustpkg
+RUSTFLAGS ?= -O $(SSL_CFG)
+RUST_REPOSITORY ?= ../rust
+RUST_CTAGS ?= $(RUST_REPOSITORY)/src/etc/ctags.rust
 VERSION=0.1-pre
 
-libhttp_files=$(shell find $(VPATH)/src/libhttp/ -type f -name '*.rs') \
-		      $(VPATH)/src/libhttp/generated/read_method.rs \
-		      $(VPATH)/src/libhttp/generated/status.rs
+codegen_files=\
+	        src/codegen/branchify.rs \
+	        src/codegen/main.rs \
+	        src/codegen/read_method.rs \
+	        src/codegen/status.rs \
 
-all: libhttp.dummy
+libhttp_so=build/.libhttp.timestamp
+http_files=\
+		      $(wildcard src/http/*.rs) \
+		      src/http/generated/read_method.rs \
+		      src/http/generated/status.rs \
+		      $(wildcard src/http/headers/*.rs) \
+		      $(wildcard src/http/client/*.rs) \
+		      $(wildcard src/http/server/*.rs)
 
-codegen: $(wildcard $(VPATH)/src/libhttp/codegen/*.rs)
-	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/libhttp/codegen/codegen.rs -o codegen
+http: $(libhttp_so)
 
-$(VPATH)/src/libhttp/generated/%.rs: codegen
-	./codegen $(patsubst $(VPATH)/src/libhttp/generated/%,%,$@) $(VPATH)/src/libhttp/generated/
+Makefile: configure Makefile.in
+	@echo "configure or Makefile.in changed, regenerating Makefile"
+	@DOING_RECONFIGURE=1 SSL_LIB="$(SSL_LIB)" SSL_CFG="$(SSL_CFG)" ./configure
+	@echo
+	@echo ======================
+	@echo Please run make again!
+	@echo ======================
+	@echo
+	@exit 1
 
-libhttp.dummy: $(libhttp_files)
-	$(RUSTC) $(RUSTFLAGS) $(VPATH)/src/libhttp/lib.rs --out-dir .
-	touch $@
+$(libhttp_so): Makefile $(http_files)
+	mkdir -p build/
+	$(RUSTC) $(RUSTFLAGS) src/http/lib.rs --out-dir=build
+	@touch build/.libhttp.timestamp
 
-build/%:: src/%.rs libhttp.dummy
-	mkdir -p '$(dir $@)'
+all: http examples docs
+
+build/codegen: $(codegen_files)
+	mkdir -p build/
+	$(RUSTC) src/codegen/main.rs --out-dir=build
+
+src/http/generated:
+	mkdir -p src/http/generated
+
+src/http/generated/%.rs: build/codegen src/http/generated
+	build/codegen $(patsubst src/http/generated/%,%,$@) src/http/generated/
+
+build/%:: src/%/main.rs $(libhttp_so)
+	mkdir -p "$(dir $@)"
 	$(RUSTC) $(RUSTFLAGS) $< -o $@ -L build/
 
-examples: build/examples/apache_fake build/examples/hello_world build/examples/info build/examples/client/client
+examples: $(patsubst src/examples/%/main.rs,build/examples/%,$(wildcard src/examples/*/main.rs)) \
+		  $(patsubst src/examples/%/main.rs,build/examples/%,$(wildcard src/examples/*/*/main.rs))
 
-.PHONY: check
-check: tests
+docs: doc/http/index.html
 
-tests: $(libhttp_files)
-	$(RUSTC) $(RUSTFLAGS) --test -o tests $(VPATH)/src/libhttp/lib.rs
-	./tests --test
+doc/http/index.html: $(http_files)
+	$(RUSTDOC) src/http/lib.rs
 
-clean-tests:
-	rm -f tests
+build/tests: $(http_files)
+	$(RUSTC) $(RUSTFLAGS) --test -o build/tests src/http/lib.rs
 
-clean: clean-tests
-	rm -rf $(VPATH)src/libhttp/generated/ codegen
-	rm -rf libhttp.dummy
-	rm -f *.so *.dylib *.dll
+build/quicktests: $(http_files)
+	$(RUSTC) --test -o build/quicktests src/http/lib.rs
 
-.PHONY: all examples clean tests clean-tests
+# Can't wait for everything to build, optimised too? OK, you can save some time here.
+quickcheck: build/quicktests
+	build/quicktests --test
+
+check: all build/tests
+	build/tests --test
+
+clean:
+	rm -rf src/http/generated/ src/http/codegen/codegen
+	rm -rf build/
+	rm -rf bin/ .rust/
+
+TAGS:
+	ctags -f TAGS --options=$(RUST_CTAGS) -R src
+
+.PHONY: all http examples docs clean check quickcheck
