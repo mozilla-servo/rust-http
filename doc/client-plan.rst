@@ -12,7 +12,7 @@ location (``http::*``, probably). *Package separation state:* complete.
 
 Types:
 
-- ``RequestWriter``, which satisfies ``std::rt::io::Writer``, but also provides
+- ``RequestWriter``, which satisfies ``std::io::Writer``, but also provides
   various convenience methods for managing other ways of doing things.
 
 To begin with, the client user will formulate an ``http::client::Request``.
@@ -39,12 +39,12 @@ probably be a wrapper about a ``Reader``.
 The initial API will be very simple, with ``Request::new(Method, Url)`` and the
 use of string typing for headers::
 
-   extern mod http;
+   extern crate http;
    use http::client::Request;
    use http::method::Get;
    use extra::url::Url;
 
-   let mut request = Request::new(Get, FromStr::from_str("http://rust-lang.org"));
+   let mut request = Request::new(Get, from_str("http://rust-lang.org"));
    request.headers.insert(~"Connection", ~"close");
    request.headers.insert(~"Referer", ~"https://google.com/");
    let mut response = request.send();

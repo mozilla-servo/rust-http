@@ -6,7 +6,6 @@ import sys
 import time
 import urllib2
 from contextlib import contextmanager
-from itertools import product
 
 
 @contextmanager
@@ -103,7 +102,7 @@ class GoServerRunner(ServerRunner):
 
     def __init__(self, *args, **kwargs):
         super(GoServerRunner, self).__init__(*args, **kwargs)
-        assert self.source.endswith('.go'), 'source must end in ".rs"'
+        assert self.source.endswith('.go'), 'source must end in ".go"'
         self.bin_name = 'go-' + os.path.basename(self.source[:-3])
 
     def compile_server(self):
@@ -129,16 +128,27 @@ class RustServerRunner(ServerRunner):
 
     PLATFORM = 'rust'
 
+    # e.g. x86_64-unknown-linux-gnu
+    HOST = subprocess.Popen(('rustc', '--version'),
+                            stdout=subprocess.PIPE).communicate()[0].split(
+                                    'host: ')[1].rstrip()
+
     def __init__(self, *args, **kwargs):
         super(RustServerRunner, self).__init__(*args, **kwargs)
         assert self.source.endswith('.rs'), 'source must end in ".rs"'
-        self.bin_name = os.path.basename(self.source[:-3])
+        # Designed for the .../x/main.rs pattern (from rustpkg), to get x.
+        self.bin_name = os.path.basename(os.path.dirname(self.source))
 
     def compile_server(self):
         subprocess.Popen(('rustc',
             '--opt-level=3', self.source,
-            '--out-dir', self.build_dir,
-            '-L', '../build/')).communicate()
+            #'--out-dir', self.build_dir,
+            '-L', '../build', # '../build/{}/http/'.format(RustServerRunner.HOST),
+            # Just in case it was built with openssl support. This should
+            # really be done better, based on the Makefile contents.
+            '-L', '../../rust-openssl/build',
+            # Sorry, this main.rs business needs me to do this, or use rustpkg:
+            '-o', os.path.join(self.build_dir, self.bin_name))).communicate()
 
     def get_server_process_details(self):
         return os.path.join(self.build_dir, self.bin_name),
@@ -166,7 +176,7 @@ class ServerRunnerCollection(object):
                 name=name, *args, **kwargs)
         if 'rust' not in skip:
             self.rust = RustServerRunner(
-                source='../src/examples/server/{}.rs'.format(name),
+                source='../src/examples/server/{}/main.rs'.format(name),
                 name=name, *args, **kwargs)
 
     def __iter__(self):

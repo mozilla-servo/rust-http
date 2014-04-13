@@ -13,19 +13,37 @@ This project has two parts:
 Both are in progress; both have basic, low-level implementations in place.
 Neither is complete nor yet compliant in any way.
 
+Rust versions
+-------------
+
+I urge you to track Rust master as rust-http does, but if you really are set on
+using Rust 0.9, you can use the [`rust-0.9-compatible`
+branch](https://github.com/chris-morgan/rust-http/commits/rust-0.9-compatible).
+It is not maintained, however; it's just the last commit that *will* work on
+Rust 0.9.
+
 Goals
 -----
 
 The goal of the present phase of this project is, quite simply, to create a
 generic HTTP server and client library for Rust.
 
-Eventually the client and server may be placed in different crates (with a
-common dependency), but I'm not sure about this yet.
+When I say “generic”, generic is what I mean: it is quite feasible to write
+non-origin servers (e.g. a proxy or a gateway) with rust-http; there will
+merely be a slightly higher level abstraction available for origin servers to
+use.
 
-This server is not opinionated; it provides the tools, handles communication,
-the HTTP/1.1 protocol and the basic headers and then leaves the rest to you.
-Things like URL routing do not belong in here; that is the domain of a
-framework.
+At present this is all one crate, but it may be separated into multiple crates
+(e.g. common HTTP, client, server); I am not sure about this yet.
+
+This server is not (in the normal sense) opinionated; it provides the tools,
+handles communication, the HTTP/1.1 protocol and the basic headers and then
+leaves the rest to you. Things like URL routing do not belong in here; that is
+the domain of a framework.
+
+There is, however, one thing on which it has strong opinions: using the type
+system. rust-http forces you to make type-safe code. This has benefits in
+safety and correctness, and also typically in speed.
 
 Getting started
 ---------------
@@ -35,20 +53,36 @@ branch.
 
 Build everything::
 
-   make
+   make all
 
 Run one of the servers::
 
-   build/examples/apache_fake
+   build/examples/server/apache_fake
 
 To run the client example, start one of the servers and run::
 
-   build/examples/client/client
+   build/examples/client http://127.0.0.1:8001/
 
 At present, all of the example servers serve to http://127.0.0.1:8001/.
 
 Don't expect everything to work well. The server claims HTTP/1.1, but is not
 in any way compliant yet.
+
+SSL support
+-----------
+
+rust-http can be compiled with or without SSL support.
+
+To compile with SSL support, drop rust-openssl_ in a sibling directory of
+rust-http (i.e. ``../rust-openssl`` from this file) and run its ``configure``
+and ``make``. rust-http's ``configure`` will then automatically detect it and
+you will get SSL support enabled.
+
+To compile rust-http without SSL support, just don’t put rust-openssl_ where it
+can find it. You'll then get an ``IoError { kind: InvalidInput, .. }`` if you
+try to make an SSL request (e.g. HTTPS).
+
+.. _rust-openssl: https://github.com/sfackler/rust-openssl
 
 Roadmap
 -------

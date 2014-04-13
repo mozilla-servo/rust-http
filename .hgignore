@@ -1,4 +1,15 @@
 ~$
-^src/libhttp/codegen/codegen$
-^src/libhttp/generated/
+\.dSYM/
+\.swp$
+^src/http/generated/
+^bin/
 ^build/
+^TAGS$
+^doc/http/
+^doc/src/http/
+^doc/\.lock$
+^doc/.*\.js$
+^doc/.*\.css$
+^lib/
+^.rust/
+^Makefile$
