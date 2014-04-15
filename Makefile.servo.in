@@ -12,10 +12,13 @@ libhttp_files=$(shell find $(VPATH)/src/http/ -type f -name '*.rs') \
 
 all: libhttp.dummy
 
-codegen: $(wildcard $(VPATH)/src/http/codegen/*.rs)
-	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/http/codegen/codegen.rs -o codegen
+codegen: $(wildcard $(VPATH)/src/codegen/*.rs)
+	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/codegen/main.rs -o codegen
 
-$(VPATH)/src/http/generated/%.rs: codegen
+$(VPATH)/src/http/generated:
+	mkdir -p $(VPATH)/src/http/generated
+
+$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated/
 	./codegen $(patsubst $(VPATH)/src/http/generated/%,%,$@) $(VPATH)/src/http/generated/
 
 libhttp.dummy: $(libhttp_files)
