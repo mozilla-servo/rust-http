@@ -1,0 +1,49 @@
+VPATH=%VPATH%
+
+RUST ?= rust
+RUSTC ?= rustc
+RUSTFLAGS ?= -O
+HOST_RUSTFLAGS ?= -O
+VERSION=0.1-pre
+
+libhttp_files=$(shell find $(VPATH)/src/http/ -type f -name '*.rs') \
+		      $(VPATH)/src/http/generated/read_method.rs \
+		      $(VPATH)/src/http/generated/status.rs
+
+all: libhttp.dummy
+
+codegen: $(wildcard $(VPATH)/src/codegen/*.rs)
+	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/codegen/main.rs -o codegen
+
+$(VPATH)/src/http/generated:
+	mkdir -p $(VPATH)/src/http/generated
+
+$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated/
+	./codegen $(patsubst $(VPATH)/src/http/generated/%,%,$@) $(VPATH)/src/http/generated/
+
+libhttp.dummy: $(libhttp_files)
+	$(RUSTC) $(RUSTFLAGS) $(VPATH)/src/http/lib.rs --out-dir .
+	touch $@
+
+build/%:: src/%.rs libhttp.dummy
+	mkdir -p '$(dir $@)'
+	$(RUSTC) $(RUSTFLAGS) $< -o $@ -L build/
+
+examples: build/examples/apache_fake build/examples/hello_world build/examples/info build/examples/client/client
+
+.PHONY: check
+check: tests
+
+tests: $(libhttp_files)
+	$(RUSTC) $(RUSTFLAGS) --test -o tests $(VPATH)/src/http/lib.rs
+	./tests --test
+
+clean-tests:
+	rm -f tests
+
+clean: clean-tests
+	rm -rf $(VPATH)src/http/generated/ codegen
+	rm -rf libhttp.dummy
+	rm -f *.so *.dylib *.dll
+
+.PHONY: all examples clean tests clean-tests

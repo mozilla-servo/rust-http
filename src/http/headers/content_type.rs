@@ -1,14 +1,13 @@
 //! The Content-Type entity header, defined in RFC 2616, Section 14.17.
 use headers::serialization_utils::{push_parameters, WriterUtil};
-use std::vec::Vec;
 use std::io::IoResult;
 use std::fmt;
 
 #[deriving(Clone, Eq)]
 pub struct MediaType {
-    type_: ~str,
-    subtype: ~str,
-    parameters: Vec<(~str, ~str)>,
+    pub type_: ~str,
+    pub subtype: ~str,
+    pub parameters: Vec<(~str, ~str)>,
 }
 
 pub fn MediaType(type_: ~str, subtype: ~str, parameters: Vec<(~str, ~str)>) -> MediaType {
