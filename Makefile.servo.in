@@ -18,7 +18,7 @@ codegen: $(wildcard $(VPATH)/src/codegen/*.rs)
 $(VPATH)/src/http/generated:
 	mkdir -p $(VPATH)/src/http/generated
 
-$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated/
+$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated
 	./codegen $(patsubst $(VPATH)/src/http/generated/%,%,$@) $(VPATH)/src/http/generated/
 
 libhttp.dummy: $(libhttp_files)
@@ -42,7 +42,7 @@ clean-tests:
 	rm -f tests
 
 clean: clean-tests
-	rm -rf $(VPATH)src/http/generated/ codegen
+	rm -rf $(VPATH)/src/http/generated/ codegen
 	rm -rf libhttp.dummy
 	rm -f *.so *.dylib *.dll
 
