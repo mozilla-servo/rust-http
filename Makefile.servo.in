@@ -15,10 +15,10 @@ all: libhttp.dummy
 codegen: $(wildcard $(VPATH)/src/codegen/*.rs)
 	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/codegen/main.rs -o codegen
 
-$(VPATH)/src/http/generated:
-	mkdir -p $(VPATH)/src/http/generated
+$(VPATH)/src/http/generated/:
+	mkdir -p $(VPATH)/src/http/generated/
 
-$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated
+$(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated/
 	./codegen $(patsubst $(VPATH)/src/http/generated/%,%,$@) $(VPATH)/src/http/generated/
 
 libhttp.dummy: $(libhttp_files)

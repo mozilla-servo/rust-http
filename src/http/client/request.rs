@@ -23,7 +23,7 @@ If you wish to send a request body (e.g. POST requests), I'm sorry to have to te
 not *good* support for this yet. However, it can be done; here is an example:
 
 ```rust
-let data: ~[u8];
+let data: &[u8];
 let mut request: RequestWriter;
 
 request.headers.content_length = Some(data.len());
@@ -81,7 +81,7 @@ pub struct RequestWriter<S = super::NetworkStream> {
     //host: Host,  // Now headers.host
 
     /// The headers sent with the request.
-    pub headers: ~HeaderCollection,
+    pub headers: Box<HeaderCollection>,
 
     /// The HTTP method for the request.
     pub method: Method,
@@ -104,17 +104,16 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
     pub fn new(method: Method, url: Url) -> IoResult<RequestWriter<S>> {
         RequestWriter::new_request(method, url, false, true)
     }
-    
+
     pub fn new_request(method: Method, url: Url, use_ssl: bool, auto_detect_ssl: bool) -> IoResult<RequestWriter<S>> {
         let host = match url.port {
             None => Host {
-                name: url.host.to_owned(),
+                name: StrBuf::from_str(url.host),
                 port: None,
             },
             Some(ref p) => Host {
-                name: url.host.to_owned(),
+                name: StrBuf::from_str(url.host),
                 port: Some(from_str(*p).expect("You didn’t aught to give a bad port!")),
-                // TODO: fix extra::url to use u16 rather than ~str
             },
         };
 
@@ -151,7 +150,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
             stream: None,
             headers_written: false,
             remote_addr: Some(remote_addr),
-            headers: ~HeaderCollection::new(),
+            headers: box HeaderCollection::new(),
             method: method,
             url: url,
             use_ssl: use_ssl,
