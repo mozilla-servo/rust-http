@@ -1,4 +1,5 @@
 use std::io::{Stream, IoResult, OtherIoError, IoError};
+use std::strbuf::StrBuf;
 use client::request::RequestWriter;
 use rfc2616::{CR, LF, SP};
 use common::read_http_version;
@@ -22,7 +23,7 @@ pub struct ResponseReader<S> {
     pub status: Status,
 
     /// The headers received in the response.
-    pub headers: ~headers::response::HeaderCollection,
+    pub headers: Box<headers::response::HeaderCollection>,
 }
 
 fn bad_response_err() -> IoError {
@@ -65,7 +66,7 @@ impl<S: Stream> ResponseReader<S> {
         }
 
         // Read the status reason
-        let mut reason = ~"";
+        let mut reason = StrBuf::new();
         loop {
             match stream.read_byte() {
                 Ok(b) if b == CR => {
@@ -92,7 +93,7 @@ impl<S: Stream> ResponseReader<S> {
         // between a request and response.
         let headers = {
             let mut buffer = RequestBuffer::new(&mut stream);
-            let mut headers = ~headers::response::HeaderCollection::new();
+            let mut headers = box headers::response::HeaderCollection::new();
             loop {
                 let xxx = buffer.read_header::<headers::response::Header>();
                 info!("header = {:?}", xxx);

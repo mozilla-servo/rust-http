@@ -23,7 +23,7 @@ pub struct ResponseWriter<'a> {
     writer: &'a mut BufferedStream<TcpStream>,
     headers_written: bool,
     pub request: &'a Request,
-    pub headers: ~HeaderCollection,
+    pub headers: Box<HeaderCollection>,
     pub status: status::Status,
 }
 
@@ -34,14 +34,14 @@ impl<'a> ResponseWriter<'a> {
             writer: writer,
             headers_written: false,
             request: request,
-            headers: ~HeaderCollection::new(),
+            headers: box HeaderCollection::new(),
             status: status::Ok,
         }
     }
 
     /// Write a response with the specified Content-Type and content; the Content-Length header is
     /// set based upon the contents
-    pub fn write_content_auto(&mut self, content_type: MediaType, content: ~str) -> IoResult<()> {
+    pub fn write_content_auto(&mut self, content_type: MediaType, content: StrBuf) -> IoResult<()> {
         self.headers.content_type = Some(content_type);
         let cbytes = content.as_bytes();
         self.headers.content_length = Some(cbytes.len());
