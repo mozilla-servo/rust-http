@@ -14,7 +14,7 @@
 #![feature(macro_rules)]
 #![feature(phase)]
 
-#[phase(syntax, link)] extern crate log;
+#[phase(plugin, link)] extern crate log;
 extern crate url;
 extern crate time;
 extern crate collections;
