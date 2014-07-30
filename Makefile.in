@@ -42,7 +42,7 @@ Makefile: configure Makefile.in
 
 $(libhttp_so): Makefile $(http_files)
 	mkdir -p target/
-	$(RUSTC) $(RUSTFLAGS) src/http/lib.rs --out-dir=target
+	$(RUSTC) $(RUSTFLAGS) src/http/lib.rs --out-dir=target --crate-type rlib
 	@touch target/.libhttp.timestamp
 
 all: http examples docs
