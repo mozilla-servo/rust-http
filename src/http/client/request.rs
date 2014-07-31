@@ -118,7 +118,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
         };
 
         let remote_addr = try!(url_to_socket_addr(&url, &host));
-        info!("using ip address {} for {}", remote_addr.to_str(), host.name.as_slice());
+        info!("using ip address {} for {}", remote_addr, host.name.as_slice());
 
         fn url_to_socket_addr(url: &Url, host: &Host) -> IoResult<SocketAddr> {
             // Just grab the first IPv4 address
@@ -224,7 +224,7 @@ impl<S: Connecter + Reader + Writer = super::NetworkStream> RequestWriter<S> {
         };
         try!(write!(self.stream.get_mut_ref() as &mut Writer,
             "{} {}{}{} HTTP/1.0\r\n",
-            self.method.to_str(), self.url.serialize_path().unwrap(), question_mark, query));
+            self.method, self.url.serialize_path().unwrap(), question_mark, query));
 
         try!(self.headers.write_all(self.stream.get_mut_ref()));
         self.headers_written = true;
