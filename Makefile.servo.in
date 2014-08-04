@@ -31,6 +31,12 @@ build/%:: src/%.rs libhttp.dummy
 
 examples: build/examples/apache_fake build/examples/hello_world build/examples/info build/examples/client/client
 
+.PHONY: doc
+doc: $(RUSTDOC_TARGET)/http/index.html
+
+$(RUSTDOC_TARGET)/http/index.html: $(libhttp_files)
+	$(RUSTDOC) $(RUSTDOC_FLAGS) --cfg nossl $(VPATH)/src/http/lib.rs -o $(RUSTDOC_TARGET)
+
 .PHONY: check
 check: tests
 
