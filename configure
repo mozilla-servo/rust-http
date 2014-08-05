@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 SRCDIR="$(cd $(dirname $0) && pwd)"
 sed "s#%VPATH%#${SRCDIR}#" ${SRCDIR}/Makefile.servo.in > Makefile
