@@ -3,6 +3,7 @@ VPATH=%VPATH%
 RUST ?= rust
 RUSTC ?= rustc
 RUSTFLAGS ?= -O
+RUSTDOC_FLAGS ?=
 HOST_RUSTFLAGS ?= -O
 VERSION=0.1-pre
 
