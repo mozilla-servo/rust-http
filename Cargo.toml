@@ -10,5 +10,8 @@ build = "./prebuild"
 name = "http"
 path = "src/http/lib.rs"
 
+[dependencies.url]
+git = "https://github.com/servo/rust-url.git"
+
 [dependencies.openssl]
 git = "https://github.com/sfackler/rust-openssl.git"
