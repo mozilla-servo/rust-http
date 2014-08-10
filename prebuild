@@ -5,4 +5,4 @@ else
   MAKE=make
 fi
 
-${MAKE} codegen src/http/generated/read_method.rs src/http/generated/status.rs
+${MAKE} target/codegen src/http/generated/read_method.rs src/http/generated/status.rs

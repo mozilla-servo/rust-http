@@ -14,7 +14,7 @@ libhttp_files=$(shell find $(VPATH)/src/http/ -type f -name '*.rs') \
 all: libhttp.dummy
 
 codegen: $(wildcard $(VPATH)/src/codegen/*.rs)
-	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/codegen/main.rs -o codegen
+	$(RUSTC) $(HOST_RUSTFLAGS) $(VPATH)/src/codegen/main.rs -o target/codegen
 
 $(VPATH)/src/http/generated:
 	mkdir -p $(VPATH)/src/http/generated
