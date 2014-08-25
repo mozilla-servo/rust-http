@@ -23,7 +23,7 @@ $(VPATH)/src/http/generated/%.rs: codegen $(VPATH)/src/http/generated
 	./codegen $(patsubst $(VPATH)/src/http/generated/%,%,$@) $(VPATH)/src/http/generated/
 
 libhttp.dummy: $(libhttp_files)
-	$(RUSTC) $(RUSTFLAGS) --cfg nossl $(VPATH)/src/http/lib.rs --out-dir .
+	$(RUSTC) $(RUSTFLAGS) $(VPATH)/src/http/lib.rs --out-dir .
 	touch $@
 
 build/%:: src/%.rs libhttp.dummy
@@ -36,13 +36,13 @@ examples: build/examples/apache_fake build/examples/hello_world build/examples/i
 doc: $(RUSTDOC_TARGET)/http/index.html
 
 $(RUSTDOC_TARGET)/http/index.html: $(libhttp_files)
-	$(RUSTDOC) $(RUSTDOC_FLAGS) --cfg nossl $(VPATH)/src/http/lib.rs -o $(RUSTDOC_TARGET)
+	$(RUSTDOC) $(RUSTDOC_FLAGS) $(VPATH)/src/http/lib.rs -o $(RUSTDOC_TARGET)
 
 .PHONY: check
 check: tests
 
 tests: $(libhttp_files)
-	$(RUSTC) $(RUSTFLAGS) --cfg nossl --test -o tests $(VPATH)/src/http/lib.rs
+	$(RUSTC) $(RUSTFLAGS) --test -o tests $(VPATH)/src/http/lib.rs
 	./tests --test
 
 clean-tests:
