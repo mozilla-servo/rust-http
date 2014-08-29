@@ -6,9 +6,12 @@ authors = [ "Chris Morgan <me@chrismorgan.info>" ]
 tags = ["web", "http", "library"]
 build = "./prebuild"
 
-[[lib]]
+[lib]
 name = "http"
 path = "src/http/lib.rs"
 
 [dependencies.openssl]
 git = "https://github.com/sfackler/rust-openssl.git"
+
+[dependencies.url]
+git = "http://github.com/servo/rust-url"
