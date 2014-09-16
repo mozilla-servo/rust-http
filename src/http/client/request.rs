@@ -6,11 +6,20 @@ If you want to make a request, `RequestWriter::new` is where you start, and
 `RequestWriter.read_response` is where you will send the request and read the response.
 
 ```rust
+extern crate http;
+extern crate url;
+
 use http::client::RequestWriter;
 use http::method::Get;
+use url::Url;
 
 fn main() {
-    let request = RequestWriter::new(Get, from_str("http://example.com/").unwrap());
+    let url = Url::parse("http://example.com/").unwrap();
+    let request: RequestWriter = match RequestWriter::new(Get, url) {
+        Ok(request) => request,
+        Err(error) => fail!(":-( {}", error),
+    };
+
     let mut response = match request.read_response() {
         Ok(response) => response,
         Err((_request, error)) => fail!(":-( {}", error),
@@ -23,8 +32,19 @@ If you wish to send a request body (e.g. POST requests), I'm sorry to have to te
 not *good* support for this yet. However, it can be done; here is an example:
 
 ```rust
-let data: &[u8];
-let mut request: RequestWriter;
+# extern crate url;
+# extern crate http;
+# use http::client::RequestWriter;
+# use http::method::Get;
+# use url::Url;
+# #[allow(unused_must_use)]
+# fn main() {
+# let url = Url::parse("http://example.com/").unwrap();
+let data = b"var1=val1&var2=val2";
+let mut request: RequestWriter = match RequestWriter::new(Get, url) {
+    Ok(request) => request,
+    Err(error) => fail!(":-( {}", error),
+};
 
 request.headers.content_length = Some(data.len());
 request.write(data);
@@ -32,6 +52,7 @@ let response = match request.read_response() {
     Ok(response) => response,
     Err((_request, error)) => fail!(":-( {}", error),
 };
+# }
 ```
 
 */
@@ -80,7 +101,7 @@ pub struct RequestWriter<S = super::NetworkStream> {
     //host: Host,  // Now headers.host
 
     /// The headers sent with the request.
-    pub headers: Box<HeaderCollection>,
+    pub headers: HeaderCollection,
 
     /// The HTTP method for the request.
     pub method: Method,
@@ -107,14 +128,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
     pub fn new_request(method: Method, url: Url, use_ssl: bool, auto_detect_ssl: bool) -> IoResult<RequestWriter<S>> {
         let host = Host {
             name: url.domain().unwrap().to_string(),
-            port: {
-                let port = url.port().unwrap();
-                if port.is_empty() {
-                    None
-                } else {
-                    Some(from_str(port).expect("You didn’t aught to give a bad port!"))
-                }
-            },
+            port: url.port(),
         };
 
         let remote_addr = try!(url_to_socket_addr(&url, &host));
@@ -150,7 +164,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
             stream: None,
             headers_written: false,
             remote_addr: Some(remote_addr),
-            headers: box HeaderCollection::new(),
+            headers: HeaderCollection::new(),
             method: method,
             url: url,
             use_ssl: use_ssl,
@@ -261,11 +275,11 @@ impl<S: Reader + Writer + Connecter = super::NetworkStream> Writer for RequestWr
         }
         // TODO: decide whether using get_mut_ref() is sound
         // (it will cause failure if None)
-        self.stream.get_mut_ref().write(buf)
+        self.stream.as_mut().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> IoResult<()> {
         // TODO: ditto
-        self.stream.get_mut_ref().flush()
+        self.stream.as_mut().unwrap().flush()
     }
 }

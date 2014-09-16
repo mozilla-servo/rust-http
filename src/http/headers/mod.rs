@@ -139,7 +139,7 @@ enum HeaderValueByteIteratorState {
 /// This ensures one cannot read past the end of a header mistakenly and that linear white space is
 /// handled correctly so that nothing else needs to worry about it. Any linear whitespace (multiple
 /// spaces outside of a quoted-string) is compacted into a single SP.
-pub struct HeaderValueByteIterator<'a, R> {
+pub struct HeaderValueByteIterator<'a, R: 'a> {
     pub reader: &'a mut R,
 
     /// This field serves two purposes. *During* iteration, it will typically be ``None``, but
@@ -177,11 +177,13 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
     ///
     /// Suggested usage is in a ``from_stream`` method::
     ///
-    ///     if reader.verify_consumed() {
-    ///         Some(header)
-    ///     } else {
-    ///         None
-    ///     }
+    ///```ignore
+    ///if reader.verify_consumed() {
+    ///    Some(header)
+    ///} else {
+    ///    None
+    ///}
+    ///```
     ///
     /// ... however, this common case is handled with the ``some_if_consumed`` method, so you may
     /// very well not need to call this function directly.
@@ -523,9 +525,11 @@ pub trait HeaderConvertible: PartialEq + Clone {
      * in the stream is removed.
      *
      * For types that implement ``FromStr``, a sane-but-potentially-not-as-fast-as-possible default
-     * would be::
+     * would be:
      *
-     *     from_str(reader.collect_to_str())
+     * ```ignore
+     * from_str(reader.collect_to_str())
+     * ```
      *
      * (This is not provided as a default implementation as owing to present upstream limitations
      * that would require the type to implement FromStr also, which is not considered reasonable.)
@@ -646,7 +650,7 @@ impl HeaderConvertible for Method {
     }
 }
 
-/**
+/*
  * ``HTTP-date`` is represented as a ``Tm``. (What follows is a quotation from RFC 2616.)
  *
  * HTTP applications have historically allowed three different formats
