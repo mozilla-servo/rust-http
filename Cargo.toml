@@ -1,10 +1,8 @@
 [package]
 name = "http"
 version = "0.1.0-pre"
-readme = "README.md"
 authors = [ "Chris Morgan <me@chrismorgan.info>" ]
-tags = ["web", "http", "library"]
-build = "./prebuild"
+build = "sh prebuild.sh"
 
 [lib]
 name = "http"
@@ -14,4 +12,4 @@ path = "src/http/lib.rs"
 git = "https://github.com/sfackler/rust-openssl.git"
 
 [dependencies.url]
-git = "http://github.com/servo/rust-url"
+git = "https://github.com/servo/rust-url"
