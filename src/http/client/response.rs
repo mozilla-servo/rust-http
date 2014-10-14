@@ -25,8 +25,9 @@ pub struct ResponseReader<S> {
     pub headers: headers::response::HeaderCollection,
 }
 
-fn bad_response_err() -> IoError {
+fn bad_response_err(msg: &str) -> IoError {
     // TODO: IoError isn't right
+    println!("{}", msg); //FIXME remove when finisehd diagnosing https://github.com/servo/servo/issues/3596
     IoError {
         kind: OtherIoError,
         desc: "Server returned malformed HTTP response",
@@ -43,7 +44,7 @@ impl<S: Stream> ResponseReader<S> {
         //println!("{}", ::std::str::from_bytes(b.slice_to(len.unwrap())));
         let http_version = match read_http_version(&mut stream, |b| b == SP) {
             Ok(nums) => nums,
-            Err(_) => return Err((request, bad_response_err())),
+            Err(_) => return Err((request, bad_response_err("invalid http version"))),
         };
 
         // Read the status code
@@ -52,14 +53,14 @@ impl<S: Stream> ResponseReader<S> {
         loop {
             if digits == 4u8 {
                 // Status code must be three digits long
-                return Err((request, bad_response_err()));
+                return Err((request, bad_response_err("status code > 3 digits long")));
             }
             match stream.read_byte() {
                 Ok(b) if b >= b'0' && b <= b'9' => {
                     status_code = status_code * 10 + b as u16 - '0' as u16;
                 },
                 Ok(b) if b == SP => break,
-                _ => return Err((request, bad_response_err())),
+                _ => return Err((request, bad_response_err("unknown error reading status code"))),
             }
             digits += 1;
         }
@@ -73,13 +74,13 @@ impl<S: Stream> ResponseReader<S> {
                         break;
                     } else {
                         // Response-Line has CR without LF. Not yet resilient; TODO.
-                        return Err((request, bad_response_err()));
+                        return Err((request, bad_response_err("response-line has CR without LF")));
                     }
                 }
                 Ok(b) => {
                     reason.push_char(b as char);
                 }
-                Err(_) => return Err((request, bad_response_err())),
+                Err(_) => return Err((request, bad_response_err("unknown error reading status reason"))),
             }
         }
 
@@ -100,11 +101,11 @@ impl<S: Stream> ResponseReader<S> {
                 //match buffer.read_header::<headers::response::Header>() {
                     Err(EndOfFile) => {
                         //fail!("server disconnected, no more response to receive :-(");
-                        return Err((request, bad_response_err()));
+                        return Err((request, bad_response_err("eof while reading header")));
                     },
                     Err(EndOfHeaders) => break,
                     Err(MalformedHeaderSyntax) => {
-                        return Err((request, bad_response_err()));
+                        return Err((request, bad_response_err("malformed header name")));
                     },
                     Err(MalformedHeaderValue) => {
                         println!("Bad header encountered. TODO: handle this better.");
