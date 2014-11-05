@@ -26,7 +26,7 @@ pub trait Server: Send + Clone {
     fn serve_forever(self) {
         let config = self.get_config();
         debug!("About to bind to {}", config.bind_address);
-        let mut acceptor = match TcpListener::bind(format!("{}", config.bind_address.ip).as_slice(), config.bind_address.port).listen() {
+        let mut acceptor = match TcpListener::bind(format!("{}", config.bind_address.ip)[], config.bind_address.port).listen() {
             Err(err) => {
                 error!("bind or listen failed :-(: {}", err);
                 return;
@@ -133,7 +133,7 @@ pub trait Server: Send + Clone {
     fn serve_once(&self, retry_accept: bool, timeout_ms: Option<u64>) -> IoResult<()> {
         let config = self.get_config();
         debug!("About to bind to {}", config.bind_address);
-        let mut acceptor = try!(TcpListener::bind(format!("{}", config.bind_address.ip).as_slice(), config.bind_address.port).listen());
+        let mut acceptor = try!(TcpListener::bind(format!("{}", config.bind_address.ip)[], config.bind_address.port).listen());
         debug!("listening for one request");
 
         loop {
@@ -192,7 +192,7 @@ pub struct Config {
 	pub bind_address: SocketAddr,
 }
 
-static PERF_DUMP_FREQUENCY : u64 = 10_000;
+const PERF_DUMP_FREQUENCY : u64 = 10_000;
 
 /// Simple function to dump out perf stats every `PERF_DUMP_FREQUENCY` requests
 fn perf_dumper(perf_receiver: Receiver<(u64, u64, u64, u64, u64)>) {

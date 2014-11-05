@@ -4,7 +4,6 @@
 #![crate_name = "info"]
 
 extern crate time;
-extern crate debug;
 extern crate http;
 
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
@@ -55,7 +54,7 @@ impl Server for InfoServer {
         }
         w.write(b"</tbody></table>").unwrap();
         w.write(b"<h2>Body</h2><pre>").unwrap();
-        w.write(r.body.as_bytes()).unwrap();
+        w.write(r.body.as_slice()).unwrap();
         w.write(b"</pre>").unwrap();
 
         w.write(b"<h1>Response</h1>").unwrap();

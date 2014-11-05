@@ -17,12 +17,12 @@ fn main() {
     let url = Url::parse("http://example.com/").unwrap();
     let request: RequestWriter = match RequestWriter::new(Get, url) {
         Ok(request) => request,
-        Err(error) => fail!(":-( {}", error),
+        Err(error) => panic!(":-( {}", error),
     };
 
     let mut response = match request.read_response() {
         Ok(response) => response,
-        Err((_request, error)) => fail!(":-( {}", error),
+        Err((_request, error)) => panic!(":-( {}", error),
     };
     // Now you have a `ResponseReader`; see http::client::response for docs on that.
 }
@@ -43,14 +43,14 @@ not *good* support for this yet. However, it can be done; here is an example:
 let data = b"var1=val1&var2=val2";
 let mut request: RequestWriter = match RequestWriter::new(Get, url) {
     Ok(request) => request,
-    Err(error) => fail!(":-( {}", error),
+    Err(error) => panic!(":-( {}", error),
 };
 
 request.headers.content_length = Some(data.len());
 request.write(data);
 let response = match request.read_response() {
     Ok(response) => response,
-    Err((_request, error)) => fail!(":-( {}", error),
+    Err((_request, error)) => panic!(":-( {}", error),
 };
 # }
 ```
@@ -73,9 +73,9 @@ use client::response::ResponseReader;
     {
         let mut buf = [0u8, ..2000];
         match stream.read(buf) {
-            None => fail!("Read error :-("),  // conditions for error interception, again
+            None => panic!("Read error :-("),  // conditions for error interception, again
             Some(bytes_read) => {
-                println!(str::from_bytes(buf.slice_to(bytes_read)));
+                println!(str::from_bytes(buf[..bytes_read]));
             }
         }
 
@@ -132,11 +132,11 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
         };
 
         let remote_addr = try!(url_to_socket_addr(&url, &host));
-        info!("using ip address {} for {}", remote_addr, host.name.as_slice());
+        info!("using ip address {} for {}", remote_addr, host.name[]);
 
         fn url_to_socket_addr(url: &Url, host: &Host) -> IoResult<SocketAddr> {
             // Just grab the first IPv4 address
-            let addrs = try!(get_host_addresses(host.name.as_slice()));
+            let addrs = try!(get_host_addresses(host.name[]));
             let addr = addrs.into_iter().find(|&a| {
                 match a {
                     Ipv4Addr(..) => true,
@@ -151,7 +151,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
             let port = match host.port {
                 Some(p) => p,
                 // FIXME: case insensitivity?
-                None => if url.scheme.as_slice() == "https" { 443 } else { 80 },
+                None => if url.scheme[] == "https" { 443 } else { 80 },
             };
 
             Ok(SocketAddr {
@@ -172,7 +172,7 @@ impl<S: Reader + Writer = super::NetworkStream> RequestWriter<S> {
 
         if auto_detect_ssl {
             // FIXME: case insensitivity?
-            request.use_ssl = request.url.scheme.as_slice() == "https";
+            request.use_ssl = request.url.scheme[] == "https";
         }
 
         request.headers.host = Some(host);
@@ -195,16 +195,16 @@ impl<S: Connecter + Reader + Writer = super::NetworkStream> RequestWriter<S> {
     /// Returns ``true`` upon success and ``false`` upon failure (also use conditions).
     pub fn connect(&mut self) -> IoResult<()> {
         if !self.stream.is_none() {
-            fail!("I don't think you meant to call connect() twice, you know.");
+            panic!("I don't think you meant to call connect() twice, you know.");
         }
 
         self.stream = match self.remote_addr {
             Some(addr) => {
                 let stream = try!(Connecter::connect(
-                    addr, self.headers.host.as_ref().unwrap().name.as_slice(), self.use_ssl));
+                    addr, self.headers.host.as_ref().unwrap().name[], self.use_ssl));
                 Some(BufferedStream::new(stream))
             },
-            None => fail!("connect() called before remote_addr was set"),
+            None => panic!("connect() called before remote_addr was set"),
         };
         Ok(())
     }
@@ -224,7 +224,7 @@ impl<S: Connecter + Reader + Writer = super::NetworkStream> RequestWriter<S> {
     pub fn write_headers(&mut self) -> IoResult<()> {
         // This marks the beginning of the response (RFC2616 §5)
         if self.headers_written {
-            fail!("RequestWriter.write_headers() called, but headers already written");
+            panic!("RequestWriter.write_headers() called, but headers already written");
         }
         if self.stream.is_none() {
             try!(self.connect());
@@ -233,14 +233,14 @@ impl<S: Connecter + Reader + Writer = super::NetworkStream> RequestWriter<S> {
         // Write the Request-Line (RFC2616 §5.1)
         // TODO: get to the point where we can say HTTP/1.1 with good conscience
         let (question_mark, query) = match self.url.query {
-            Some(ref query) => ("?", query.as_slice()),
+            Some(ref query) => ("?", query[]),
             None => ("", "")
         };
-        try!(write!(self.stream.get_mut_ref() as &mut Writer,
+        try!(write!(self.stream.as_mut().unwrap() as &mut Writer,
             "{} {}{}{} HTTP/1.0\r\n",
             self.method, self.url.serialize_path().unwrap(), question_mark, query));
 
-        try!(self.headers.write_all(self.stream.get_mut_ref()));
+        try!(self.headers.write_all(self.stream.as_mut().unwrap()));
         self.headers_written = true;
         Ok(())
     }

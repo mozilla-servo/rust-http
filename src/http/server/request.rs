@@ -14,10 +14,10 @@ use headers::{HeaderLineErr, EndOfFile, EndOfHeaders, MalformedHeaderSyntax, Mal
 
 // /// Line/header can't be more than 4KB long (note that with the compacting of LWS the actual source
 // /// data could be longer than 4KB)
-// static MAX_LINE_LEN: uint = 0x1000;
+// const MAX_LINE_LEN: uint = 0x1000;
 
-static MAX_REQUEST_URI_LEN: uint = 1024;
-pub static MAX_METHOD_LEN: uint = 64;
+const MAX_REQUEST_URI_LEN: uint = 1024;
+pub const MAX_METHOD_LEN: uint = 64;
 
 pub struct RequestBuffer<'a, S: 'a> {
     /// The socket connection to read from
@@ -76,7 +76,7 @@ impl<'a, S: Stream> RequestBuffer<'a, S> {
             if raw_request_uri.len() == MAX_REQUEST_URI_LEN {
                 return Err(status::RequestUriTooLong)
             }
-            raw_request_uri.push_char(next_byte as char);
+            raw_request_uri.push(next_byte as char);
 
             next_byte = match self.stream.read_byte() {
                 Ok(b) => b,
@@ -219,7 +219,7 @@ pub struct Request {
     pub headers: headers::request::HeaderCollection,
 
     /// The body of the request; empty for such methods as GET.
-    pub body: String,
+    pub body: Vec<u8>,
 
     /// The HTTP method for the request.
     pub method: Method,
@@ -275,9 +275,9 @@ impl RequestUri {
             Some(Star)
         } else if request_uri.as_bytes()[0] as char == '/' {
             Some(AbsolutePath(request_uri))
-        } else if request_uri.as_slice().contains("/") {
+        } else if request_uri[].contains("/") {
             // An authority can't have a slash in it
-            match Url::parse(request_uri.as_slice()) {
+            match Url::parse(request_uri[]) {
                 Ok(url) => Some(AbsoluteUri(url)),
                 Err(_) => None,
             }
@@ -309,7 +309,7 @@ impl Request {
         let mut request = Request {
             remote_addr: buffer.stream.wrapped.peer_name().ok(),
             headers: headers::request::HeaderCollection::new(),
-            body: String::new(),
+            body: Vec::new(),
             method: Options,
             request_uri: Star,
             close_connection: true,
@@ -334,7 +334,7 @@ impl Request {
 
         loop {
             match buffer.read_header() {
-                Err(EndOfFile) => fail!("client disconnected, nowhere to send response"),
+                Err(EndOfFile) => panic!("client disconnected, nowhere to send response"),
                 Err(EndOfHeaders) => break,
                 Err(MalformedHeaderSyntax) => {
                     println!("BAD REQUEST: malformed header (TODO: is this right?)");
@@ -364,7 +364,7 @@ impl Request {
                         request.close_connection = true;
                         break;
                     },
-                    headers::connection::Token(ref s) if s.as_slice() == "keep-alive" => {
+                    headers::connection::Token(ref s) if s[] == "keep-alive" => {
                         request.close_connection = false;
                         // No break; let it be overridden by close should some weird person do that
                     },
@@ -378,10 +378,7 @@ impl Request {
         match request.headers.content_length {
             Some(length) => {
                 match buffer.read_exact(length) {
-                    Ok(body) => match String::from_utf8(body) {
-                        Ok(body_str) => request.body = body_str,
-                        Err(_) => return (request, Err(status::BadRequest))
-                    },
+                    Ok(body) => request.body = body,
                     Err(_) => return (request, Err(status::BadRequest))
                 }
             },

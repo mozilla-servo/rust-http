@@ -28,7 +28,7 @@ pub fn branchify(options: &[(&str, &str)], case_sensitive: bool) -> Vec<ParseBra
         match chariter.next() {
             Some(c) => {
                 let first_case = if case_sensitive { c as u8 } else { c.to_ascii().to_uppercase().to_byte() };
-                for next_branch in branch.children.mut_iter() {
+                for next_branch in branch.children.iter_mut() {
                     if next_branch.matches[0] == first_case {
                         go_down_moses(next_branch, chariter, result, case_sensitive);
                         return;
@@ -102,13 +102,13 @@ pub fn generate_branchified_method(
             let next_prefix = format!("{}{}", prefix, c as char);
             w!(format!("Ok(b'{}') => match {} {{", c as char, read_call));
             for b in branch.children.iter() {
-                try!(r(writer, b, next_prefix.as_slice(), indent + 1, read_call, end, max_len, valid, unknown));
+                try!(r(writer, b, next_prefix[], indent + 1, read_call, end, max_len, valid, unknown));
             }
             match branch.result {
                 Some(ref result) =>
                     w!(format!("    Ok(b' ') => return Ok({}),", *result)),
                 None => w!(format!("    Ok(b' ') => return Ok({}),",
-                                  unknown.replace("{}", format!("String::from_str(\"{}\")", next_prefix).as_slice()))),
+                                  unknown.replace("{}", format!("String::from_str(\"{}\")", next_prefix)[]))),
             }
             w!(format!("    Ok(b) if {} => (\"{}\", b),", valid, next_prefix));
             w!("    Ok(_) => return Err(::std::io::IoError { kind: ::std::io::OtherIoError, desc: \"bad value\", detail: None }),");
@@ -134,7 +134,7 @@ pub fn generate_branchified_method(
     w!(       ("};"));
     w!(       ("// OK, that didn't pan out. Let's read the rest and see what we get."));
     w!(       ("let mut s = String::from_str(s);"));
-    w!(       ("s.push_char(next_byte as char);"));
+    w!(       ("s.push(next_byte as char);"));
     w!(       ("loop {"));
     w!(format!("    match {} {{", read_call));
     w!(format!("        Ok(b) if b == {} => return Ok({}),", end, unknown.replace("{}", "s")));
@@ -143,7 +143,7 @@ pub fn generate_branchified_method(
     w!(       ("                // Too long; bad request"));
     w!(       ("                return Err(::std::io::IoError { kind: ::std::io::OtherIoError, desc: \"too long, bad request\", detail: None });"));
     w!(       ("            }"));
-    w!(       ("            s.push_char(b as char);"));
+    w!(       ("            s.push(b as char);"));
     w!(       ("        },"));
     w!(       ("        Ok(_) => return Err(::std::io::IoError { kind: ::std::io::OtherIoError, desc: \"bad value\", detail: None }),"));
     w!(       ("        Err(err) => return Err(err),"));

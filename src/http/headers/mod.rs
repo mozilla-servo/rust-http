@@ -100,7 +100,7 @@ pub fn header_enum_from_stream<R: Reader, E: HeaderEnum>(reader: &mut R)
     loop {
         state = match (state, reader.read_byte()) {
             (Start, Ok(b)) | (ReadingName, Ok(b)) if is_token_item(b) => {
-                header_name.push_char(b as char);
+                header_name.push(b as char);
                 ReadingName
             },
             // TODO: check up on the rules for a line like "Name : value". Full LWS?
@@ -121,7 +121,7 @@ pub fn header_enum_from_stream<R: Reader, E: HeaderEnum>(reader: &mut R)
     match header {
         Some(h) => (Ok(h), iter.next_byte),
         None => {
-            debug!("malformed header value for {}", header_name.as_slice());
+            debug!("malformed header value for {}", header_name[]);
             // Alas, I can't tell you what the value actually was... TODO: improve that situation
             (Err(MalformedHeaderValue), iter.next_byte)
         },
@@ -213,12 +213,12 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
         loop {
             match self.next() {
                 None => break,
-                Some(b) => out.push_char(b as char),
+                Some(b) => out.push(b as char),
             }
         }
         /*Doesn't work: "cannot borrow immutable self value as mutable" (!! TODO: report bug)
         for b in self {
-            out.push_char(b as char);
+            out.push(b as char);
         }*/
         out
     }
@@ -300,7 +300,7 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
                         Start => return None,
                         Normal if b == b'\\' => Escaping,
                         Normal if b == b'"' => break,
-                        Normal | Escaping => { output.push_char(b as char); Normal },
+                        Normal | Escaping => { output.push(b as char); Normal },
                     }
                 }
             }
@@ -375,7 +375,7 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
                         Some(b) => state = match state {
                             Normal if b == b'\\' => Escaping,
                             Normal if b == b'"' => break,
-                            Normal | Escaping => { output.push_char(b as char); Normal },
+                            Normal | Escaping => { output.push(b as char); Normal },
                         }
                     }
                 }
@@ -394,7 +394,7 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
                     break;
                 },
                 Some(b) if is_token_item(b) => {
-                    output.push_char(b as char);
+                    output.push(b as char);
                 },
                 Some(b) => {
                     println!("TODO: what should be done with a token ended with a non-separator? \
@@ -423,7 +423,7 @@ impl<'a, R: Reader> HeaderValueByteIterator<'a, R> {
                     break;
                 },
                 Some(b) if is_token_item(b) => {
-                    output.push_char(b as char);
+                    output.push(b as char);
                 },
                 Some(b) => {
                     println!("TODO: what should be done with a token ended with a non-separator? \
@@ -593,7 +593,7 @@ impl<T: CommaListHeaderConvertible> HeaderConvertible for Vec<T> {
             if i != 0 {
                 out.push_str(", ");
             }
-            out.push_str(item.http_value().as_slice())
+            out.push_str(item.http_value()[])
         }
         out
     }
@@ -617,7 +617,7 @@ impl HeaderConvertible for String {
 
 impl HeaderConvertible for uint {
     fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<uint> {
-        from_str(reader.collect_to_string().as_slice())
+        from_str(reader.collect_to_string()[])
     }
 
     fn http_value(&self) -> String {
@@ -627,7 +627,7 @@ impl HeaderConvertible for uint {
 
 impl HeaderConvertible for Url {
     fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Url> {
-        Url::parse(reader.collect_to_string().as_slice()).ok()
+        Url::parse(reader.collect_to_string()[]).ok()
     }
 
     fn http_value(&self) -> String {
@@ -640,7 +640,7 @@ impl CommaListHeaderConvertible for Method {}
 impl HeaderConvertible for Method {
     fn from_stream<R: Reader>(reader: &mut HeaderValueByteIterator<R>) -> Option<Method> {
         match reader.read_token() {
-            Some(s) => Method::from_str_or_new(s.as_slice()),
+            Some(s) => Method::from_str_or_new(s[]),
             None => None,
         }
     }
@@ -713,24 +713,24 @@ impl HeaderConvertible for Tm {
         let value = reader.collect_to_string();
 
         // XXX: %Z actually ignores any timezone other than UTC. Probably not a good idea?
-        match strptime(value.as_slice(), "%a, %d %b %Y %T %Z") {  // RFC 822, updated by RFC 1123
+        match strptime(value[], "%a, %d %b %Y %T %Z") {  // RFC 822, updated by RFC 1123
             Ok(time) => return Some(time),
             Err(_) => ()
         }
 
-        match strptime(value.as_slice(), "%A, %d-%b-%y %T %Z") {  // RFC 850, obsoleted by RFC 1036
+        match strptime(value[], "%A, %d-%b-%y %T %Z") {  // RFC 850, obsoleted by RFC 1036
             Ok(time) => return Some(time),
             Err(_) => ()
         }
 
-        match strptime(value.as_slice(), "%c") {  // ANSI C's asctime() format
+        match strptime(value[], "%c") {  // ANSI C's asctime() format
             Ok(time) => Some(time),
             Err(_) => None
         }
     }
 
     fn http_value(&self) -> String {
-        self.to_utc().strftime("%a, %d %b %Y %T GMT")
+        self.to_utc().strftime("%a, %d %b %Y %T GMT").unwrap()
     }
 }
 
@@ -875,9 +875,9 @@ macro_rules! headers_mod {
 
             #[allow(unused_imports)]
             use std::io::{BufReader, IoResult};
-            use std::ascii::OwnedStrAsciiExt;
+            use std::ascii::OwnedAsciiExt;
             use time;
-            use collections::treemap::{TreeMap, Entries};
+            use collections::tree_map::{TreeMap, Entries};
             use headers;
             use headers::{HeaderEnum, HeaderConvertible, HeaderValueByteIterator};
 
@@ -960,7 +960,7 @@ macro_rules! headers_mod {
                                 self.ext_iter = Some(self.coll.extensions.iter());
                                 continue
                             },
-                            _ => match self.ext_iter.get_mut_ref().next() {
+                            _ => match self.ext_iter.as_mut().unwrap().next() {
                                 Some((k, v)) =>
                                     return Some(ExtensionHeader(k.clone(), v.clone())),
                                 None => return None,
@@ -1009,7 +1009,7 @@ macro_rules! headers_mod {
 
                 fn value_from_stream<R: Reader>(name: String, value: &mut HeaderValueByteIterator<R>)
                         -> Option<Header> {
-                    match name.clone().into_ascii_lower().as_slice() {
+                    match name.clone().into_ascii_lower()[] {
                         $($input_name => match HeaderConvertible::from_stream(value) {
                             Some(v) => Some($caps_ident(v)),
                             None => None,
