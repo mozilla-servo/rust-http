@@ -7,6 +7,7 @@ use std::io::net::tcp::TcpStream;
 use std::io::{IoResult, IoError, ConnectionAborted, OtherIoError};
 use self::openssl::ssl::{SslStream, SslContext, Sslv23, Ssl};
 use self::openssl::ssl::error::{SslError, StreamError, SslSessionClosed, OpenSslErrors};
+use self::NetworkStream::{NormalStream, SslProtectedStream};
 use connecter::Connecter;
 
 /// A TCP stream, either plain text or SSL.
@@ -23,7 +24,7 @@ impl Connecter for NetworkStream {
         if use_ssl {
             let context = try!(SslContext::new(Sslv23).map_err(lift_ssl_error));
             let ssl = try!(Ssl::new(&context).map_err(lift_ssl_error));
-            ssl.set_hostname(host).unwrap();
+            try!(ssl.set_hostname(host).map_err(lift_ssl_error));
             let ssl_stream = try!(SslStream::new_from(ssl, stream).map_err(lift_ssl_error));
             Ok(SslProtectedStream(ssl_stream))
         } else {
