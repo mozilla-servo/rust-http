@@ -11,7 +11,7 @@ use headers::HeaderLineErr::{EndOfFile, EndOfHeaders, MalformedHeaderSyntax,
                              MalformedHeaderValue};
 
 pub struct ResponseReader<S> {
-    stream: BufferedStream<S>,
+   pub stream: BufferedStream<S>,
 
     /// The request which this is a response to
     pub request: RequestWriter<S>,
